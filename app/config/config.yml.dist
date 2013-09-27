@@ -3,8 +3,8 @@
 # require username, password and perhaps a hostname.
 # If you're trying out Bolt, just keep it set to SQLite for now.
 database:
-  driver: sqlite
-  databasename: bolt
+    driver: sqlite
+    databasename: bolt
 
 # The name of the website
 sitename: A sample site
@@ -83,12 +83,12 @@ recordsperpage: 10
 # default_image is the default size of images, when using {{ record.image|image() }}
 # Note: if you change these values, you might need to clear the cache before they show up.
 thumbnails:
-  default_thumbnail: [ 160, 120 ]
-  default_image: [ 1000, 750 ]
-  quality: 80
-  cropping: crop
-  notfound_image: view/img/default_notfound.png
-  error_image: view/img/default_error.png
+    default_thumbnail: [ 160, 120 ]
+    default_image: [ 1000, 750 ]
+    quality: 80
+    cropping: crop
+    notfound_image: view/img/default_notfound.png
+    error_image: view/img/default_error.png
 
 # If you want to 'brand' the Bolt backend for a client, you can change some key variables
 # here, that determine the name of the backend, and adds a primary support/contact link
@@ -97,9 +97,9 @@ thumbnails:
 # by default, if you change it here, it will only be accessible through the value set in
 # 'path'. Keep the path simple: lowercase only, no extra slashes or other special characters.
 #branding:
-#  name: SuperCMS
-#  path: /admin
-#  provided_by: [ supercool@example.org, "Supercool Webdesign Co." ]
+#    name: SuperCMS
+#    path: /admin
+#    provided_by: [ supercool@example.org, "Supercool Webdesign Co." ]
 
 # Show the 'debug' nut in the lower right corner for logged-in user. By default,
 # the debugbar is only shown to logged-in users. Use the 'debug_show_loggedoff'
@@ -121,17 +121,17 @@ strict_variables: false
 # options are set to 'false'. If you choose to enable them for your editors, please
 # instruct them thoroughly on their responsibilty not to break the layout.
 wysiwyg:
-  images: true
-  anchor: true
-  tables: true
-  fontcolor: false
-  align: true
-  subsuper: false
-  embed: true,
-  anhor: true,
-  ck:
-    allowedContent: true # If set to 'true', any elements and attributes are allowed in Wysiwg Elements
-    autoParagraph: true # If set to 'true', any pasted content is wrapped in <p> tags for multiple line-breaks
+    images: true
+    anchor: true
+    tables: true
+    fontcolor: false
+    align: true
+    subsuper: false
+    embed: true,
+    anhor: true,
+    ck:
+        allowedContent: true # If set to 'true', any elements and attributes are allowed in Wysiwg Elements
+        autoParagraph: true # If set to 'true', any pasted content is wrapped in <p> tags for multiple line-breaks
     #contentsCss: '' # Absolute Path to CSS File on Server because it's loaded by JavaScript stylesheetparser
     filebrowserWindowWidth: '640'
     filebrowserWindowHeight: '480'
@@ -139,12 +139,12 @@ wysiwyg:
 # by default, mail is sent using PHP's built-in mail function. In general, it's advised to use SMTP for sending mail
 # instead. Uncomment the following lines to use an SMTP server with authentication.
 #mailoptions:
-#  host: localhost
-#  port: 25
-#  username: username
-#  password: password
-#  encryption: null
-#  auth_mode: null
+#    host: localhost
+#    port: 25
+#    username: username
+#    password: password
+#    encryption: null
+#    auth_mode: null
 
 # Bolt allows some modifications to how 'strict' login sessions are. For every option
 # that is set to true, it becomes harder for a bad-willing person to spoof your login
@@ -173,6 +173,6 @@ hash_strength: 10
 
 # If you want Bolt installation get news through a proxy
 #httpProxy:
-#  host: my.proxy.server
-#  user: usr
-#  password: pwd
+#    host: my.proxy.server
+#    user: usr
+#    password: pwd
