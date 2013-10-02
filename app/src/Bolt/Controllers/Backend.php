@@ -413,7 +413,7 @@ class Backend implements ControllerProviderInterface
             array('limit' => $limit, 'order' => $order, 'page' => $page, 'filter' => $filter));
 
         // @todo Do we need pager here?
-        $app['pager'] = $pager;
+        //$app['pager'] = $pager;
 
         $title = sprintf("<strong>%s</strong> » %s", __('Overview'), $contenttype['name']);
         $app['twig']->addGlobal('title', $title);
