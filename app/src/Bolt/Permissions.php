@@ -328,16 +328,20 @@ class Permissions
                 break;
 
             case 'contenttype':
-                list($_, $contenttype, $permission, $contentid) = $parts;
-                if (empty($permission)) {
-                    $permission = 'view';
+                list($_, $contenttype) = $parts;
+
+                if (empty($parts[2])) {
+                    $parts[2] = 'view';
                 }
+
+                $permission = $parts[2];
                 // Handle special case for owner.
                 // It's a bit unfortunate that we have to fetch the content
                 // item for this, but since we're in the back-end, we probably
                 // won't see a lot of traffic here, so it's probably
                 // forgivable.
-                if (!empty($contentid)) {
+                if (!empty($parts[3])) {
+                    $contentid = $parts[3];
                     $content = $this->app['storage']->getContent("$contenttype/$contentid");
                     if (intval($content['ownerid']) &&
                         (intval($content['ownerid']) === intval($user['id']))) {
