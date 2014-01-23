@@ -894,7 +894,7 @@ class Users
 
         // Loop over the users, check if anybody's root.
         foreach ($this->getUsers() as $user) {
-            if (is_array($user['roles']) && in_array('root', $user['roles'])) {
+            if (isset($user['roles']) && is_array($user['roles']) && in_array('root', $user['roles'])) {
                 // We have a 'root' user.
                 return true;
             }
