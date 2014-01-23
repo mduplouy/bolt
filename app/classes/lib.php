@@ -668,7 +668,6 @@ function hackislyParseRegexTemplates($obj)
 
 function getPaths($original = array() )
 {
-
     // If we passed the entire $app, set the $config
     if ($original instanceof \Bolt\Application) {
         if (!empty($original['canonicalpath'])) {
@@ -725,7 +724,7 @@ function getPaths($original = array() )
     // Set the root
     $path_prefix = dirname($_SERVER['PHP_SELF'])."/";
     $path_prefix = preg_replace("/^[a-z]:/i", "", $path_prefix);
-    $path_prefix = str_replace("//", "/", str_replace("\\", "/", $path_prefix));
+    $path_prefix = str_replace(array('//', '\\'), '/', $path_prefix);
     if (empty($path_prefix) || 'cli-server' === php_sapi_name()) {
         $path_prefix = "/";
     }
