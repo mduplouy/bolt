@@ -101,6 +101,8 @@ class Render
      */
     public function fetchCachedRequest()
     {
+        $result = null;
+
         if ($this->checkCacheConditions('request', true)) {
             $key = md5($this->app['request']->getPathInfo());
 
