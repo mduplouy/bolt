@@ -1,7 +1,6 @@
 {% include '_header.twig' with { 'active':'settings' } %}
 
-
-<h1>{{ __('Files: %path%',{'%path%':path}) }}</h1>
+<h1>{{ __('Files: %path%', { '%path%' : path } ) }}</h1>
 
 {% if pathsegments|length > 1 %}
     <p>{{ __('Path:') }}
@@ -68,28 +67,58 @@
             {% endif %}
         </td>
         <td class='actions'>
+
             <div class="btn-group">
-            <button class="btn dropdown-toggle btn-mini" data-toggle="dropdown">
-                {{ __('Options') }}
-                <span class="caret"></span>
-            </button>
 
-            <ul class="dropdown-menu pull-right">
-                <li><a href="#" data-confirm="Not yet implemented. Sorry!" class="confirm">
-                    <i class="icon-ban-circle"></i> {{ __('Delete %filename%',{'%filename%':file.filename}) }}</a></li>
-                <li><a href="#" data-confirm="Not yet implemented. Sorry!" class="confirm">
-                    <i class="icon-copy"></i> {{ __('Duplicate %filename%',{'%filename%':file.filename}) }}</a></li>
-                <li class="divider"></li>
-                <li><a class="nolink">{{ __('Permissions') }}:
-                        <strong><code>{{ file.permissions }}</code></strong></a></li>
+                <a href="#" class="btn btn-mini" data-action="addToStack('{{file.newpath}}');">
+                    <i class="icon-paper-clip"></i>
+                    {{ __('Place on stack') }}
+                </a>
 
-            </ul>
+                <a class="btn dropdown-toggle btn-mini" data-toggle="dropdown">
+                    <i class="icon-info-sign"></i>
+                    {{ __('Options') }}
+                    <span class="caret"></span>
+                </a>
+
+                <ul class="dropdown-menu pull-right">
+                    <li><a href="#" data-confirm="Not yet implemented. Sorry!" class="confirm">
+                        <i class="icon-ban-circle"></i> {{ __('Delete %filename%',{'%filename%':file.filename}) }}</a></li>
+                    <li><a href="#" data-confirm="Not yet implemented. Sorry!" class="confirm">
+                        <i class="icon-copy"></i> {{ __('Duplicate %filename%',{'%filename%':file.filename}) }}</a></li>
+                    <li class="divider"></li>
+                    <li><a class="nolink">{{ __('Permissions') }}:
+                            <strong><code>{{ file.permissions }}</code></strong></a></li>
+
+                </ul>
             </div>
 
         </td>
     </tr>
 {% endfor %}
 </table>
+{% endif %}
+
+{# only show the "Upload here" form, if the folder is writable. #}
+{% if form != false %}
+    <hr />
+    <form action="" method="post" {{ form_enctype(form) }}>
+        <fieldset>
+            {{ form_widget(form) }}
+            <button type="submit" class="btn btn-info" style="margin-top: 4px;">
+                <i class="icon-upload"></i>
+                <span>{{ __('Upload file') }}</span>
+            </button>
+        </fieldset>
+    </form>
+
+    <script type="text/javascript">
+        $(function() {
+            $('input[type=file]').bootstrapFileInput();
+        });
+    </script>
+{% else %}
+    <p><i class="icon-exclamation-sign"></i> {{ __('Uploading to this folder is not allowed.') }}</p>
 {% endif %}
 
 

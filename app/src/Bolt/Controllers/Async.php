@@ -54,6 +54,15 @@ class Async implements ControllerProviderInterface
             ->assert('path', '.+')
             ->bind('asyncbrowse');
 
+        $ctr->get("/addstack/{filename}", array($this, 'addstack'))
+            ->before(array($this, 'before'))
+            ->assert('filename', '.*')
+            ->bind('addstack');
+
+        $ctr->get("/showstack", array($this, 'showstack'))
+            ->before(array($this, 'before'))
+            ->bind('showstack');
+
         return $ctr;
 
     }
@@ -350,6 +359,34 @@ class Async implements ControllerProviderInterface
     }
 
 
+    public function addstack($filename = "", Silex\Application $app)
+    {
+
+        // \util::var_dump($filename);
+
+        $app['stack']->add($filename);
+
+        return true;
+
+    }
+
+
+
+    public function showstack(Silex\Application $app)
+    {
+
+        $count = $app->request->get('items', 10);
+
+        $stack = $app['stack']->listitems($count);
+
+        return $app['twig']->render('_sub_stack.twig', array(
+            'stack' => $stack
+        ));
+
+    }
+
+
+
     /**
      * Middleware function to do some tasks that should be done for all aynchronous
      * requests.
@@ -369,5 +406,6 @@ class Async implements ControllerProviderInterface
         }
 
     }
+
 
 }

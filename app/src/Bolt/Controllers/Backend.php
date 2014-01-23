@@ -87,7 +87,7 @@ class Backend implements ControllerProviderInterface
             ->before(array($this, 'before'))
             ->bind('useraction');
 
-        $ctl->get("/files/{path}", array($this, 'files'))
+        $ctl->match("/files/{path}", array($this, 'files'))
             ->before(array($this, 'before'))
             ->assert('path', '.+')
             ->bind('files');
@@ -840,6 +840,41 @@ class Backend implements ControllerProviderInterface
         $path = stripTrailingSlash(str_replace("..", "", $path));
         $currentfolder = realpath($basefolder . $path);
 
+        if (is_writable($currentfolder)) {
+
+            // Define the "Upload here" form.
+            $form = $app['form.factory']
+                ->createBuilder('form')
+                ->add('FileUpload', 'file', array('label' => "Upload a file to this folder:"))
+                ->getForm();
+
+            // Handle the upload.
+            if ($request->isMethod('POST')) {
+                $form->bind($request);
+                if ($form->isValid()) {
+                    $files = $request->files->get($form->getName());
+                    /* Make sure that Upload Directory is properly configured and writable */
+                    $filename = $files['FileUpload']->getClientOriginalName();
+                    $files['FileUpload']->move($currentfolder, $filename);
+                    echo "path: $path";
+                    $app['session']->getFlashBag()->set('info', __("File '%file%' was uploaded successfully.", array('%file%' => $filename)));
+
+                    // Add the file to our stack..
+                    $app['stack']->add($path . "/" . $filename);
+                } else {
+                    $app['session']->getFlashBag()->set('error', __("File '%file%' could not be uploaded.", array('%file%' => $filename)));
+                }
+                return redirect('files', array('path' => $path));
+            }
+
+            $formview = $form->createView();
+
+        } else {
+            // Folder not writable, don't show an upload.
+            $formview = false;
+        }
+
+
         $ignored = array(".", "..", ".DS_Store", ".gitignore", ".htaccess");
 
         // Get the pathsegments, so we can show the path..
@@ -919,7 +954,8 @@ class Backend implements ControllerProviderInterface
             'path' => $path,
             'files' => $files,
             'folders' => $folders,
-            'pathsegments' => $pathsegments
+            'pathsegments' => $pathsegments,
+            'form' => $formview
         ));
 
     }

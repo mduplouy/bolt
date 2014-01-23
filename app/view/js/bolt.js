@@ -15,7 +15,7 @@ jQuery(function($) {
     });
 
     // Helper to make things like '<button data-action="eventView.load()">' work
-    $('button, input[type=button]').on('click', function(e){
+    $('button, input[type=button], a').on('click', function(e){
         var action = $(this).data('action');
         if (typeof(action) != "undefined" && (action != "") ) {
             eval(action);
@@ -273,6 +273,10 @@ function bindFileUpload(key) {
                         $('#field-' + key).val(filename);
                         $('#thumbnail-' + key).html("<img src='" + path + "../thumbs/120x120c/"+encodeURI(filename)+"' width='120' height='120'>");
                         window.setTimeout(function(){ $('#progress-' + key).fadeOut('slow'); }, 1500);
+
+                        // Add the uploaded file to our stack..
+                        addToStack(filename);
+
                     } else {
                         alert("Oops! There was an error uploading the image. Make sure the image file is not corrupt, and that the 'files/'-folder is writable.");
                         window.setTimeout(function(){ $('#progress-' + key).fadeOut('slow'); }, 50);
@@ -521,6 +525,26 @@ function bindMarkdown(key) {
 
 }
 
+/**
+ * Add a file to our simple Stack.
+ *
+ * @param string filename
+ * @param string filepath
+ */
+function addToStack(filename) {
+    console.log('add to stack: ', filename);
+
+    $.ajax({
+        url: asyncpath + 'addstack/' + filename,
+        type: 'GET',
+        success: function(result) {
+            console.log('Added file to stack');
+        },
+        error: function() {
+            console.log('Failed to add file to stack');
+        }
+    });
+}
 
 /**
  * Model, Collection and View for Imagelist.
