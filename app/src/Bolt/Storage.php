@@ -1340,7 +1340,7 @@ class Storage
         }
 
         // oof, part deux!
-        if (($meta_parameters['order'] == false) && ($this->app->raw('request') instanceof Request)) {
+        if (empty($meta_parameters['order']) && ($this->app->raw('request') instanceof Request)) {
             $meta_parameters['order'] = $this->app['request']->get('order', false);
         }
 
