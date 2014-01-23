@@ -5,26 +5,31 @@
     "keywords": ["CMS", "Silex", "PHP", "Symfony"],
     "license": "MIT",
     "require": {
-        "dflydev/markdown": "1.0.*",
+        "bobdenotter/dumper": "dev-master",
         "doctrine/dbal": "~2.4",
+        "erusev/parsedown": "dev-master",
         "filp/whoops": "1.*",
         "garetjax/phpbrowscap": "dev-master",
         "guzzle/guzzle": "3.3.*",
         "hautelook/phpass": "dev-master",
-        "htmlawed/htmlawed": "dev-master",
+        "ircmaxell/random-lib": "1.0.*@dev",
         "jbroadway/urlify": "1.0.0-stable",
         "php": ">=5.3.2",
         "silex/silex": "1.*",
+        "silex/web-profiler": "~1.0",
         "swiftmailer/swiftmailer": "5.*",
-        "symfony/config": "~2.3",
-        "symfony/console": "~2.3",
-        "symfony/filesystem": "~2.3",
-        "symfony/finder": "~2.3",
-        "symfony/form": "~2.3",
-        "symfony/translation": "~2.3",
-        "symfony/twig-bridge": "~2.3",
-        "symfony/validator": "~2.3",
-        "symfony/yaml": "~2.3",
+        "symfony/config": "~2.4",
+        "symfony/console": "~2.4",
+        "symfony/filesystem": "~2.4",
+        "symfony/finder": "~2.4",
+        "symfony/form": "~2.4",
+        "symfony/locale": "~2.4",
+        "symfony/translation": "~2.4",
+        "symfony/twig-bridge": "~2.4",
+        "symfony/validator": "~2.4",
+        "symfony/web-profiler-bundle": "~2.4",
+        "symfony/yaml": "~2.4",
+        "tdammers/htmlmaid": ">=0.5.1",
         "twig/twig": ">=1.8,<2.0-dev"
     },
     "require-dev": {
@@ -33,10 +38,19 @@
         "phpunit/dbunit": "1.2.3",
         "phpmd/phpmd": "1.5.0",
         "sebastian/phpcpd": "1.4.3",
-        "squizlabs/php_codesniffer": "1.4.6"
+        "squizlabs/php_codesniffer": "1.4.6",
+        "codeception/codeception": "*"
     },
+    "repositories": [
+        {
+            "type": "vcs",
+            "url": "https://github.com/bobdenotter/dumper"
+        }
+    ],
     "minimum-stability": "beta",
-    "preferred-install": "dist",
+    "config": {
+        "preferred-install": "dist"
+    },
     "prefer-stable": true,
     "autoload": {
         "psr-0": {

@@ -81,7 +81,18 @@ class Users
     public function saveUser($user)
     {
         // Make an array with the allowed columns. these are the columns that are always present.
-        $allowedcolumns = array('id', 'username', 'password', 'email', 'lastseen', 'lastip', 'displayname', 'userlevel', 'enabled', 'contenttypes', 'stack');
+        $allowedcolumns = array(
+                'id',
+                'username',
+                'password',
+                'email',
+                'lastseen',
+                'lastip',
+                'displayname',
+                'enabled',
+                'stack',
+                'roles',
+            );
 
         // unset columns we don't need to store..
         foreach ($user as $key => $value) {
@@ -104,10 +115,6 @@ class Users
             $user['lastseen'] = "1900-01-01";
         }
 
-        if (empty($user['userlevel'])) {
-            $user['userlevel'] = key(array_slice($this->getUserLevels(), -1));
-        }
-
         if (empty($user['enabled']) && $user['enabled']!== 0) {
             $user['enabled'] = 1;
         }
@@ -124,11 +131,20 @@ class Users
             $user['failedlogins'] = 0;
         }
 
-        // Serialize the contenttypes..
-        if (empty($user['contenttypes'])) {
-            $user['contenttypes'] = array();
+        // Make sure the 'stack' is set.
+        if (empty($user['stack'])) {
+            $user['stack'] = serialize(array());
+        } elseif (is_array($user['stack'])) {
+            $user['stack'] = serialize($user['stack']);
         }
-        $user['contenttypes'] = serialize($user['contenttypes']);
+
+        // Serialize roles array
+        if (empty($user['roles']) || !is_array($user['roles'])) {
+            $user['roles'] = '[]';
+        } else {
+            $user['roles'] = json_encode(array_values(array_unique($user['roles'])));
+        }
+
 
         // Decide whether to insert a new record, or update an existing one.
         if (empty($user['id'])) {
@@ -166,27 +182,21 @@ class Users
             if ($database = $this->getUser($this->currentuser['id'])) {
                 // Update the session with the user from the database.
                 $this->currentuser = array_merge($this->currentuser, $database);
+            } else {
+                // User doesn't exist anymore
+                $this->logout();
+                return false;
+            }
+            if (!$this->currentuser['enabled']) {
+                // user has been disabled since logging in
+                $this->logout();
+                return false;
             }
         } else {
             // no current user, check if we can resume from authtoken cookie, or return without doing the rest.
             $result = $this->loginAuthtoken();
 
             return $result;
-        }
-
-        if (intval($this->currentuser['userlevel']) <= self::ANONYMOUS) {
-            $this->logout();
-
-            return false;
-        }
-
-        // set the rights for each of the contenttypes for this user.
-        foreach ($this->app['config']->get('contenttypes') as $key => $contenttype) {
-            if (in_array($key, $this->currentuser['contenttypes'])) {
-                $this->allowed['contenttype:' . $key] = self::EDITOR;
-            } else {
-                $this->allowed['contenttype:' . $key] = self::ADMIN;
-            }
         }
 
         $key = $this->getAuthtoken($this->currentuser['username']);
@@ -200,9 +210,8 @@ class Users
         }
 
         // Check if user is _still_ allowed to log on..
-        if (($this->currentuser['userlevel'] < self::EDITOR) || !$this->currentuser['enabled']) {
+        if (!$this->isAllowed('login') || !$this->currentuser['enabled']) {
             $this->logout();
-
             return false;
         }
 
@@ -219,6 +228,7 @@ class Users
      * Get a key to identify the session with.
      *
      * @param  string $name
+     * @param string $salt
      * @return string
      */
     private function getAuthtoken($name = "", $salt = "")
@@ -252,7 +262,7 @@ class Users
     private function setAuthtoken()
     {
 
-        $salt = makekey(12);
+        $salt = $this->app['randomgenerator']->generateString(12);
         $token = array(
             'username' => $this->currentuser['username'],
             'token' => $this->getAuthtoken($this->currentuser['username'], $salt),
@@ -270,9 +280,9 @@ class Users
             time() + $this->app['config']->get('general/cookies_lifetime'),
             '/',
             $this->app['config']->get('general/cookies_domain'),
-            false,
+            $this->app['config']->get('general/cookies_https_only'),
             true
-		);
+        );
 
         try {
             // Check if there's already a token stored for this name / IP combo.
@@ -491,12 +501,12 @@ class Users
             setcookie(
                 'bolt_authtoken',
                 '',
-                time() -1 ,
+                time() -1,
                 '/',
                 $this->app['config']->get('general/cookies_domain'),
-                false,
+                $this->app['config']->get('general/cookies_https_only'),
                 true
-			);
+            );
 
             return false;
 
@@ -515,8 +525,8 @@ class Users
 
         if (!empty($user)) {
 
-            $shadowpassword = makeKey(10, true);
-            $shadowtoken = makeKey(32, false);
+            $shadowpassword = $this->app['randomgenerator']->generateString(12);
+            $shadowtoken = $this->app['randomgenerator']->generateString(32);
 
             $hasher = new \Hautelook\Phpass\PasswordHash($this->hash_strength, true);
             $shadowhashed = $hasher->HashPassword($shadowpassword);
@@ -537,7 +547,7 @@ class Users
             $this->db->update($this->usertable, $update, array('id' => $user['id']));
 
             // Compile the email with the shadow password and reset link..
-            $mailhtml = $this->app['twig']->render('mail/passwordreset.twig', array(
+            $mailhtml = $this->app['render']->render('mail/passwordreset.twig', array(
                 'user' => $user,
                 'shadowpassword' => $shadowpassword,
                 'shadowtoken' => $shadowtoken,
@@ -591,7 +601,7 @@ class Users
         if (!empty($user)) {
 
             // allright, we can reset this user..
-            $this->app['session']->getFlashBag()->set('success', "Password reset successful! You can now log on with the password that was sent to you via email.");
+            $this->app['session']->getFlashBag()->set('success', __("Password reset successful! You can now log on with the password that was sent to you via email."));
 
             $update = array(
                 'password' => $user['shadowpassword'],
@@ -605,7 +615,7 @@ class Users
 
             // That was not a valid token, or too late, or not from the correct IP.
             $this->app['log']->add("Somebody tried to reset a password with an invalid token.", 3, '', 'issue');
-            $this->app['session']->getFlashBag()->set('error', "Password reset not successful! Either the token was incorrect, or you were too late, or you tried to reset the password from a different IP-address.");
+            $this->app['session']->getFlashBag()->set('error', __("Password reset not successful! Either the token was incorrect, or you were too late, or you tried to reset the password from a different IP-address."));
 
 
         }
@@ -655,12 +665,12 @@ class Users
         setcookie(
             'bolt_authtoken',
             '',
-            time() -1 ,
+            time() -1,
             '/',
             $this->app['config']->get('general/cookies_domain'),
-            false,
+            $this->app['config']->get('general/cookies_https_only'),
             true
-		);
+        );
 
         // This is commented out for now: shouldn't be necessary, and it also removes the flash notice.
         // $this->session->invalidate();
@@ -682,7 +692,6 @@ class Users
             'lastseen' => '',
             'lastip' => '',
             'displayname' => '',
-            'userlevel' => key($this->getUserLevels()),
             'enabled' => '1',
             'shadowpassword' => '',
             'shadowtoken' => '',
@@ -701,17 +710,12 @@ class Users
      */
     public function getUsers()
     {
-
         if (empty($this->users) || !is_array($this->users)) {
 
             $query = "SELECT * FROM " . $this->usertable;
             $this->users = array();
 
             try {
-
-                // get the available contenttypes.
-                $allcontenttypes = array_keys($this->app['config']->get('contenttypes'));
-
                 $tempusers = $this->db->fetchAll($query);
 
                 foreach ($tempusers as $user) {
@@ -719,38 +723,17 @@ class Users
                     $this->users[$key] = $user;
                     $this->users[$key]['password'] = "**dontchange**";
 
-                    // Older Bolt versions didn't store userlevel as int. Assume they're 'Developer', to prevent lockout.
-                    if (in_array($this->users[$key]['userlevel'], array('administrator', 'developer', 'editor'))) {
-                        $this->users[$key]['userlevel'] = self::DEVELOPER;
+                    $roles = json_decode($this->users[$key]['roles']);
+                    if (!is_array($roles)) {
+                        $roles = array();
                     }
-
-                    // Make sure contenttypes is an array.
-                    if (!array_key_exists('contenttypes', $this->users[$key])) {
-                        $this->users[$key]['contenttypes'] = "";
-                    }
-                    $this->users[$key]['contenttypes'] = unserialize($this->users[$key]['contenttypes']);
-                    if (!is_array($this->users[$key]['contenttypes'])) {
-                        $this->users[$key]['contenttypes'] = array();
-                    }
-                    // Intersect, to make sure no old/deleted contenttypes show up.
-                    $this->users[$key]['contenttypes'] = array_intersect($this->users[$key]['contenttypes'], $allcontenttypes);
-
-                    // Developers/admins can access all content
-                    if ($this->users[$key]['userlevel'] > self::EDITOR) {
-                        $this->users[$key]['contenttypes'] = $allcontenttypes;
-                    }
-
-
+                    // add "everyone" role to, uhm, well, everyone.
+                    $roles[] = Permissions::ROLE_EVERYONE;
+                    $this->users[$key]['roles'] = array_unique($roles);
                 }
             } catch (\Exception $e) {
                 // Nope. No users.
             }
-
-            // Extra special case: if there are no users, allow adding one..
-            if (empty($this->users)) {
-                $this->allowed['useredit'] = self::ANONYMOUS;
-            }
-
         }
 
         return $this->users;
@@ -810,9 +793,10 @@ class Users
 
     /**
      * Enable or disable a user, specified by id.
-     * @param  int        $id
-     * @param  int        $enabled
-     * @return bool|mixed
+     *
+     * @param  int $id
+     * @param  int $enabled
+     * @return bool
      */
     public function setEnabled($id, $enabled = 1)
     {
@@ -828,58 +812,179 @@ class Users
 
     }
 
-
     /**
-     * get an associative array of the current userlevels.
+     * Check if a certain user has a specific role
      *
-     * Should we move this to a 'constants.yml' file?
-     * @return array
+     * @param mixed $id
+     * @param string $role
+     * @return bool
      */
-    public function getUserLevels()
+    public function hasRole($id, $role)
     {
-        $userlevels = array(
-            self::EDITOR => "Editor",
-            self::ADMIN => "Administrator",
-            self::DEVELOPER => "Developer"
-        );
 
-        return $userlevels;
+        $user = $this->getUser($id);
+
+        if (empty($user)) {
+            return false;
+        }
+
+        return (is_array($user['roles']) && in_array($role, $user['roles']));
 
     }
 
+    /**
+     * Add a certain role from a specific user.
+     *
+     * @param mixed $id
+     * @param string $role
+     * @return bool
+     */
+    public function addRole($id, $role)
+    {
+
+        $user = $this->getUser($id);
+
+        if (empty($user) || empty($role)) {
+            return false;
+        }
+
+        // Add the role to the $user['roles'] array
+        $user['roles'][] = (string) $role;
+
+        return $this->saveUser($user);
+
+    }
+
+    /**
+     * Remove a certain role from a specific user.
+     *
+     * @param mixed $id
+     * @param string $role
+     * @return bool
+     */
+    public function removeRole($id, $role)
+    {
+
+        $user = $this->getUser($id);
+
+        if (empty($user) || empty($role)) {
+            return false;
+        }
+
+        // Remove the role from the $user['roles'] array.
+        $user['roles'] = array_diff($user['roles'], array((string) $role));
+
+        return $this->saveUser($user);
+
+    }
+
+    /**
+     * Check for a user with the 'root' role. There should always be at least one
+     * If there isn't we promote the current user.
+     *
+     * @return bool
+     */
+    public function checkForRoot()
+    {
+
+        // Don't check for root, if we're not logged in.
+        if ($this->getCurrentUsername() == false) {
+            return false;
+        }
+
+        // Loop over the users, check if anybody's root.
+        foreach ($this->getUsers() as $user) {
+            if (is_array($user['roles']) && in_array('root', $user['roles'])) {
+                // We have a 'root' user.
+                return true;
+            }
+        }
+
+        // Make sure the DB is updated. Note, that at this point we currently don't have
+        // the permissions to do so, but if we don't, update the DB, we can never add the
+        // role 'root' to the current user.
+        $this->app['integritychecker']->repairTables();
+
+        // If we reach this point, there is no user 'root'. We promote the current user.
+        $this->addRole($this->getCurrentUsername(), 'root');
+
+        // Show a helpful message to the user.
+        $this->app['session']->getFlashBag()->set('info', __("There should always be at least one 'root' user. You have just been promoted. Congratulations!"));
+
+    }
+
+    /**
+     * Runs a permission check. Permissions are encoded as strings, where
+     * the ':' character acts as a separator for dynamic parts and
+     * sub-permissions.
+     * Apart from the route-based rules defined in permissions.yml, the
+     * following special cases are available:
+     *
+     * "overview:$contenttype" - view the overview for the content type. Alias
+     *                           for "contenttype:$contenttype:view".
+     * "contenttype:$contenttype",
+     * "contenttype:$contenttype:view",
+     * "contenttype:$contenttype:view:$id" - View any item or a particular item
+     *                                       of the specified content type.
+     * "contenttype:$contenttype:edit",
+     * "contenttype:$contenttype:edit:$id" - Edit any item or a particular item
+     *                                       of the specified content type.
+     * "contenttype:$contenttype:create" - Create a new item of the specified
+     *                                     content type. (It doesn't make sense
+     *                                     to provide this permission on a
+     *                                     per-item basis, for obvious reasons)
+     * "contenttype:$contenttype:change-ownership",
+     * "contenttype:$contenttype:change-ownership:$id" - Change the ownership
+     *                                of the specified content type or item.
+     *
+     * @param string $what The desired permission, as elaborated upon above.
+     * @return bool TRUE if the permission is granted, FALSE if denied.
+     */
     public function isAllowed($what)
     {
+        $user = $this->currentuser;
 
-        if (substr($what, 0, 12) == 'contenttype:') {
-            $contenttype = substr($what, 12);
-            $validContenttypes = $this->users[$this->currentuser['username']]['contenttypes'];
+        return $this->app['permissions']->isAllowed($what, $user);
+    }
 
-            return (is_array($validContenttypes) && in_array($contenttype, $validContenttypes));
+    public function isContentStatusTransitionAllowed($fromStatus, $toStatus, $contenttype, $contentid = null)
+    {
+        $user = $this->currentuser;
+
+        return $this->app['permissions']->isContentStatusTransitionAllowed($fromStatus, $toStatus, $user, $contenttype, $contentid);
+    }
+
+    private function canonicalizeFieldValue($fieldname, $fieldvalue)
+    {
+        switch ($fieldname) {
+            case 'email':
+                return strtolower(trim($fieldvalue));
+
+            case 'username':
+                return strtolower(preg_replace('/[^a-zA-Z0-9_\\-]/', '', $fieldvalue));
+
+            default:
+                return trim($fieldvalue);
         }
-
-        if (isset($this->allowed[$what]) && ($this->allowed[$what] > $this->currentuser['userlevel'])) {
-            return false;
-        } else {
-            return true;
-        }
-
     }
 
     /**
-     * Check if a certain field with a certain value doesn't exist already. We use
-     * 'makeSlug', because we shouldn't allow 'admin@example.org', when there already
-     * is an 'ADMIN@EXAMPLE.ORG'.
+     * Check if a certain field with a certain value doesn't exist already.
+     * Depending on the field type, different pre-massaging of the compared
+     * values are applied, because what constitutes 'equal' for the purpose
+     * of this filtering depends on the field type.
      *
      * @param  string $fieldname
      * @param  string $value
      * @param  int    $currentid
      * @return bool
      */
-    public function checkAvailability($fieldname, $value, $currentid=0)
+    public function checkAvailability($fieldname, $value, $currentid = 0)
     {
-
         foreach ($this->users as $user) {
-            if ((makeSlug($user[$fieldname]) == makeSlug($value)) && ($user['id'] != $currentid)) {
+            if (($this->canonicalizeFieldValue($fieldname, $user[$fieldname]) ===
+                 $this->canonicalizeFieldValue($fieldname, $value)) &&
+                ($user['id'] != $currentid)) {
                 return false;
             }
         }

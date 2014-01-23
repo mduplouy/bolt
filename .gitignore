@@ -3,6 +3,7 @@ app/config/*.yml
 *config.yml
 app/database/*
 files/*
+thumbs/
 vendor/
 composer.phar
 .DS_Store
@@ -18,3 +19,10 @@ php-cs-fixer.phar
 *.sublime-*
 .*.swp
 /tags
+.swp
+*.lock
+.gitignore
+
+composer.lock
+tests/_log
+tests/*/*Guy.php

@@ -72,6 +72,11 @@ class Extension extends \Bolt\BaseExtension
             $this->config['stylesheet'] = "";
         }
 
+        // Make sure CSRF is set, unless disabled on purpose
+        if (!isset($this->config['csrf'])) {
+            $this->config['csrf'] = true;
+        }
+
         // Set the button text.
         if (empty($this->config['button_text'])) {
             $this->config['button_text'] = "Send";
@@ -82,11 +87,11 @@ class Extension extends \Bolt\BaseExtension
     }
 
 
-
     /**
      * Create a simple Form.
      *
-     * @param string $name
+     * @param string $formname
+     * @internal param string $name
      * @return string
      */
     function simpleForm($formname = "")
@@ -126,11 +131,16 @@ class Extension extends \Bolt\BaseExtension
         $error = "";
         $sent = false;
 
-        $form = $this->app['form.factory']->createBuilder('form');
+        $form = $this->app['form.factory']->createBuilder('form', null, array('csrf_protection' => $this->config['csrf']));
 
         foreach ($formconfig['fields'] as $name => $field) {
 
             $options = array();
+
+            if ($field['type'] == "ip" || $field['type'] == "timestamp") {
+                // we're storing IP and timestamp later.
+                continue;
+            }
 
             if (!empty($field['label'])) {
                 $options['label'] = $field['label'];
@@ -217,42 +227,64 @@ class Extension extends \Bolt\BaseExtension
 
         $form = $form->getForm();
 
+        // Include the ReCaptcha PHP Library
+        require_once('recaptcha-php-1.11/recaptchalib.php');
+
         if ('POST' == $this->app['request']->getMethod()) {
-            $form->bind($this->app['request']);
+            $isRecaptchaValid = true; // to prevent recpatcha check if not enabled
 
-            if ($form->isValid()) {
+            if($this->config['recaptcha_enabled']){
+                $isRecaptchaValid = false; // by Default
 
-                $res = $this->processForm($formconfig, $form, $formname);
+                $resp = recaptcha_check_answer ($this->config['recaptcha_private_key'],
+                    $this->getRemoteAddress(),
+                    $_POST["recaptcha_challenge_field"],
+                    $_POST["recaptcha_response_field"]);
 
-                if ($res) {
-                    $message = $formconfig['message_ok'];
-                    $sent = true;
+                $isRecaptchaValid = $resp->is_valid;
+            }
 
-                    // If redirect_on_ok is set, redirect to that page when succesful.
-                    if (!empty($formconfig['redirect_on_ok'])) {
-                        $content = $this->app['storage']->getContent($formconfig['redirect_on_ok']);
-                        simpleredirect($content->link(), false);
+            if($isRecaptchaValid) {
+                $form->bind($this->app['request']);
+
+                if ($form->isValid()) {
+
+                    $res = $this->processForm($formconfig, $form, $formname);
+
+                    if ($res) {
+                        $message = $formconfig['message_ok'];
+                        $sent = true;
+
+                        // If redirect_on_ok is set, redirect to that page when succesful.
+                        if (!empty($formconfig['redirect_on_ok'])) {
+                            $content = $this->app['storage']->getContent($formconfig['redirect_on_ok']);
+                            simpleredirect($content->link(), false);
+                        }
+
+                    } else {
+                        $error = $formconfig['message_technical'];
                     }
 
                 } else {
-                    $error = $formconfig['message_technical'];
+
+                    $error = $formconfig['message_error'];
+
                 }
-
             } else {
-
-                $error = $formconfig['message_error'];
-
+                $error = $this->config['recaptcha_error_message'];
             }
         }
 
 
-        $formhtml = $this->app['twig']->render($formconfig['template'], array(
+        $formhtml = $this->app['render']->render($formconfig['template'], array(
             "submit" => "Send",
             "form" => $form->createView(),
             "message" => $message,
             "error" => $error,
             "sent" => $sent,
             "formname" => $formname,
+            "recaptcha_html" => ($this->config['recaptcha_enabled'] ? recaptcha_get_html($this->config['recaptcha_public_key']) : ''),
+            "recaptcha_theme" => ($this->config['recaptcha_enabled'] ? $this->config['recaptcha_theme'] : ''),
             "button_text" => $formconfig['button_text']
         ));
 
@@ -306,7 +338,13 @@ class Extension extends \Bolt\BaseExtension
 
                 $files = $this->app['request']->files->get($form->getName());
                 $originalname = strtolower($files[$fieldname]->getClientOriginalName());
-                $filename = sprintf("%s-%s-%s.%s", $fieldname, date('Y-m-d'), makeKey(8), getExtension($originalname));
+                $filename = sprintf(
+                    "%s-%s-%s.%s",
+                    $fieldname,
+                    date('Y-m-d'),
+                    $this->app['randomgenerator']->generateString(8, 'abcdefghijklmnopqrstuvwxyz01234567890'),
+                    getExtension($originalname)
+                );
                 $link = sprintf("%s%s/%s", $this->app['paths']['rooturl'], $linkpath, $filename);
 
                 // Make sure the file is in the allowed extensions.
@@ -335,6 +373,15 @@ class Extension extends \Bolt\BaseExtension
                 $data[$fieldname] = $data[$fieldname]->format($format);
             }
 
+            if ($fieldvalues['type'] == "ip") {
+                $data[$fieldname] = $this->getRemoteAddress();
+            }
+
+            if ($fieldvalues['type'] == "timestamp") {
+                $format = "%F %T";
+                $data[$fieldname] = strftime($format);
+            }
+
         }
 
         // Attempt to insert the data into a table, if specified..
@@ -349,7 +396,7 @@ class Extension extends \Bolt\BaseExtension
             }
         }
 
-        $mailhtml = $this->app['twig']->render($formconfig['mail_template'], array(
+        $mailhtml = $this->app['render']->render($formconfig['mail_template'], array(
             'form' =>  $data ));
 
         if($formconfig['debugmode']==true) {
@@ -446,6 +493,29 @@ class Extension extends \Bolt\BaseExtension
         }
 
         return $res;
+
+    }
+
+    /**
+     * Get the user's IP-address for logging, even if they're behind a non-trusted proxy.
+     * Note: these addresses can't be 'trusted', Use them for logging only.
+     *
+     * @return string
+     */
+    private function getRemoteAddress()
+    {
+
+        $server = $this->app['request']->server;
+
+        if ($server->has('HTTP_CLIENT_IP')) {
+            $addr = $server->get('HTTP_CLIENT_IP');
+        } else if ($server->has('HTTP_X_FORWARDED_FOR')) {
+            $addr = $server->get('HTTP_X_FORWARDED_FOR');
+        } else {
+            $addr = $server->get('REMOTE_ADDR');
+        }
+
+        return $addr;
 
     }
 

@@ -1,28 +1,35 @@
+{% import '_sub_pretty.twig' as pretty %}
 
 <section class="news">
     <h2>{{ __('Latest activity') }}</h2>
     <ul class='activity'>
 {% for log in activity %}
-    {% set username = 'unknown' %}
     {% if attribute(users, log.username) is defined %}
-        {% set username = attribute(users, log.username).displayname %}
+        {% set userlink = pretty.userlink(attribute(users, log.username)) %}
+    {% else %}
+        {% set userlink = __('unknown') %}
     {% endif %}
     <li>
         {%  if log.code == "save content" %}
-            Saved {% if app.config.get('contenttypes')[log.contenttype] is defined %}
-                {{ app.config.get('contenttypes')[log.contenttype].singular_name }}
+            {% if app.config.get('contenttypes')[log.contenttype] is defined %}
+                {% set contenttype = app.config.get('contenttypes')[log.contenttype] %}
+                {% set contenttype_display_name = contenttype.singular_name %}
+                {% set content_display_name = pretty.contentlink_by_id(contenttype, log.message, log.content_id) %}
             {% else %}
-                {{ log.contenttype }}
+                {% set contenttype_display_name = log.contenttype %}
+                {% set content_display_name = log.message %}
             {% endif %}
-            "<strong>{{ log.message }}</strong>" by <em>{{ username }}</em>
+
+            {{ __('Saved') }} {{ contenttype_display_name }}
+            "<strong>{{ content_display_name }}</strong>" {{ __('by') }} <em>{{ userlink }}</em>
         {%  elseif log.code == "login" %}
-            <em>{{ username }}</em> logged in
+            <em>{{ userlink }}</em> {{ __('logged in') }}
         {%  elseif log.code == "logout" %}
-            <em>{{ username }}</em> logged out
+            <em>{{ userlink }}</em> {{ __('logged out') }}
         {%  elseif log.code == "fixme" %}
-            <b>Fixme:</b> {{ log.message }}
+            <b>{{ __('Fixme:') }}</b> {{ log.message }}
         {%  elseif log.code == "user" %}
-            <b>{{ log.message }}</b> by {{ username }}
+            <b>{{ log.message }}</b> {{ __('by') }} {{ userlink }}
         {%  else %}
             {{ log.message }}
         {%  endif %}

@@ -12,7 +12,7 @@
 
 error_reporting(E_ALL | E_STRICT);
 
-if (strpos(__DIR__,'/bolt-public/') !== false) { // installed bolt with composer
+if (strpos(__DIR__, DIRECTORY_SEPARATOR.'bolt-public'.DIRECTORY_SEPARATOR) !== false) { // installed bolt with composer
     require_once __DIR__.'/../../../../vendor/bolt/bolt/app/bootstrap.php';
 } else {
     require_once __DIR__.'/../../bootstrap.php';
@@ -37,5 +37,5 @@ require('upload.class.php');
 $upload_handler = new UploadHandler(array(
     'upload_dir' => dirname(dirname(dirname(dirname($_SERVER['SCRIPT_FILENAME'])))).'/files/'.date('Y-m')."/",
     'upload_url' => '/files/'.date('Y-m')."/",
-    'accept_file_types' => '/\.(gif|jpe?g|png|zip|tgz|txt|md|docx?|pdf|xlsx?|pptx?|mp3)$/i'
+    'accept_file_types' => '/\.(gif|jpe?g|png|zip|tgz|txt|md|docx?|pdf|xlsx?|pptx?|mp3|ogg|wav|m4a|mp4|m4v|ogv|wmv|avi|webm)$/i'
 ));

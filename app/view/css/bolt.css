@@ -21,7 +21,7 @@ body {
 }
 
 body.popup {
-    padding: 0px 12px;
+    padding: 6px 12px 0;
 }
 
 h1, h2, h3, h4, h5, h6 {
@@ -56,13 +56,16 @@ strong, b {
     font-weight: 600;
 }
 
-tt, code {
-    background-color: #E8E8E8;
-    color: #555;
-    padding: 1px 2px;
+tt, code, .source-code {
     font-family: Menlo, Consolas, Monaco, "Courier New", monospace;
+}
+
+tt, code {
+    padding: 1px 2px;
     border: 0px;
     white-space: pre;
+    color: #555;
+    background-color: #E8E8E8;
 }
 
 pre {
@@ -200,10 +203,34 @@ hr {
     line-height: 19px;
 }
 
+.navbar .nav > li > form > button.btn,
 .navbar .nav > li > a {
     color: #E7E7E7;
     font-weight: bold;
     padding: 9px 10px 11px;
+    margin: 0 0 0 0;
+}
+
+.navbar .nav > li > form > button.btn {
+    line-height: inherit;
+    border-width: 0;
+    vertical-align: inherit;
+    text-shadow: 0 -1px 0 rgba(0, 0, 0, 0.25);
+    display: inline;
+    font-weight: bold !important;
+    font-size: 13px;
+    font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+}
+
+.navbar form {
+    margin: 0 0 0 0;
+    padding: 0 0 0 0;
+    display: inline;
+}
+
+.navbar .nav > li > form > button.btn:hover {
+    color: white;
+    text-decoration: none;
 }
 
 .navbar .nav .active > a,
@@ -279,6 +306,18 @@ footer  {
 .popover.bottom .popover-content, .popover.bottom .popover-content code {
     font-size: 12px;
     overflow:hidden;
+}
+
+.table-changelog-details th {
+    width: 40%;
+}
+
+.table-changelog-details th:first-child {
+    width: 20%;
+}
+
+.table-changelog-details td {
+    vertical-align: top;
 }
 
 /**
@@ -504,10 +543,14 @@ aside .btn {
 /**
  * Stacked files
  */
+#protostack {
+    display: none;
+}
+
 #stackholder {
     height: 120px;
     padding: 12px 0 12px 2px;
-    overflow: hidden;
+    /* overflow: hidden; */
 }
 
 .stackitem {
@@ -521,6 +564,10 @@ aside .btn {
     left: 0px;
     margin-right: -80px;
     overflow: hidden;
+}
+
+.stackitem-wide {
+    margin-right: -35px
 }
 
 .stackitem strong {
@@ -587,12 +634,22 @@ aside .btn {
 
 .stackitem.item-6 {
     z-index: 105;
-    -webkit-transform: rotate(-3deg);
-    -moz-transform: rotate(-3deg);
-    -o-transform: rotate(-3deg);
-    -ms-transform: rotate(-3deg);
-    transform: rotate(-3deg);
+    -webkit-transform: rotate(3deg);
+    -moz-transform: rotate(3deg);
+    -o-transform: rotate(3deg);
+    -ms-transform: rotate(3deg);
+    transform: rotate(3deg);
     margin-top: 5px;
+}
+
+.stackitem.item-7 {
+    z-index: 104;
+    -webkit-transform: rotate(-5deg);
+    -moz-transform: rotate(-5deg);
+    -o-transform: rotate(-5deg);
+    -ms-transform: rotate(-5deg);
+    transform: rotate(-5deg);
+    margin-top: -3px;
 }
 
 
@@ -609,7 +666,7 @@ div.extension {
     box-shadow: 1px 1px 3px rgba(0, 0, 0, .25);
 }
 
-
+div.extension h3 {
     font-size: 17px;
     line-height: 28px;
     margin: 4px 0 0;
@@ -642,7 +699,7 @@ label span.left {
     display: block;
     float: left;
     min-width: 180px;
-    margin-top: 5px;
+    margin: 5px 8px 0 0;
 }
 
 input[type="checkbox"] {
@@ -859,22 +916,22 @@ fieldset.checkbox div {
     cursor: pointer;
 }
 
-#editcontent div.imagelistholder.dropzone {
+#editcontent div.imagelistholder.dropzone,
+#editcontent div.filelistholder.dropzone {
     height: auto;
 }
 
-#editcontent div.imagelistholder textarea {
-    display: none;
-}
 
-#editcontent div.imagelistholder p {
+#editcontent div.imagelistholder p,
+#editcontent div.filelistholder p, {
     padding: 8px;
     color: #999;
     margin: 0;
     font-style: italic;
 }
 
-#editcontent div.imagelistholder div.list {
+#editcontent div.imagelistholder div.list,
+#editcontent div.filelistholder div.list {
     border: 1px solid #BBB;
     padding: 0 2px;
     float: left;
@@ -890,31 +947,59 @@ fieldset.checkbox div {
     border-radius: 3px;
     cursor: ns-resize;
     box-shadow: 1px 1px 3px rgba(0, 0, 0, 0.3);
+    overflow: hidden;
 }
 
+#editcontent div.filelistholder div.list div {
+    height: 70px;
+    margin: 6px;
+    border-radius: 3px;
+    cursor: ns-resize;
+    box-shadow: 1px 1px 3px rgba(0, 0, 0, 0.3);
+    overflow: hidden;
+    background: url("/app/view/css/smoothness/images/ui-bg_glass_75_e6e6e6_1x400.png") repeat-x scroll 50% 61% rgb(230, 230, 230);
+}
+#editcontent div.filelistholder div.list .fileDescription {
+    font-size: 80%;
+    font-weight: bold;
+}
 
-#editcontent div.imagelistholder div.list div * {
+#editcontent div.imagelistholder div.list div *,
+#editcontent div.filelistholder div.list div * {
     float: left;
     margin: 4px 3px 0;
     padding-left: 4px;
 }
 
-#editcontent div.imagelistholder div.list div input {
+#editcontent div.imagelistholder div.list div input,
+#editcontent div.filelistholder div.list div input {
     width: 264px;
     margin: 9px 0 0 4px;
 }
 
-#editcontent div.imagelistholder div.list div i {
+#editcontent div.imagelistholder div.list div i,
+#editcontent div.filelistholder div.list div i {
     margin: 11px 0 0;
     padding: 0;
     cursor: pointer;
     color: #999;
 }
 
-#editcontent div.imagelistholder div.buttons {
-    display: inline;
+#editcontent div.imagelistholder div.buttons,
+#editcontent div.filelistholder div.buttons {
     float: left;
     padding: 7px 8px;
+}
+
+#editcontent div.tagcloud {
+    margin-left: 180px;
+    margin-top: 6px;
+    width: 70%;
+}
+
+#editcontent div.tagcloud a {
+    margin-right: 6px;
+    display: inline-block;
 }
 
 .ui-sortable-helper {
@@ -931,7 +1016,7 @@ fieldset.checkbox div {
 /** Overrides for CKeditor */
 
 .cke_reset_all, .cke_reset_all * {
-    max-width: 1000px;
+    max-width: 1500px;
 }
 
 .cke_chrome {
@@ -1158,6 +1243,11 @@ blockquote.quote cite {
         visibility: hidden;
     }
 
+    #editcontent div.tagcloud {
+        margin-left: 0;
+        width: 100%;
+    }
+
 }
 
 @media (max-width: 768px) {
@@ -1231,7 +1321,6 @@ blockquote.quote cite {
     #editcontent div.video-container {
         padding-right: 0;
     }
-
 }
 
 @media (max-width: 979px) {

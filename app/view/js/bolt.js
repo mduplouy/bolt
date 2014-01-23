@@ -14,14 +14,11 @@ jQuery(function($) {
         helpers: { overlay: { css: { 'background' : 'rgba(0, 0, 0, 0.5)' } } }
     });
 
-    // Helper to make things like '<button data-action="eventView.load()">' work
-    $('button, input[type=button], a').on('click', function(e){
-        var action = $(this).data('action');
-        if (typeof(action) != "undefined" && (action != "") ) {
-            eval(action);
-            e.preventDefault();
-        }
-    });
+    initActions();
+
+    window.setTimeout(function(){
+        initKeyboardShortcuts();
+    }, 1000);
 
     // Show 'dropzone' for jQuery file uploader.
     // @todo make it prettier, and distinguish between '.in' and '.hover'.
@@ -109,8 +106,90 @@ jQuery(function($) {
         }
     });
 
+    $( window ).konami({
+        cheat: function() {
+
+            $.ajax({
+                url: 'http://bolt.cm/easter',
+                type: 'GET',
+                dataType: 'jsonp',
+                success: function(data) {
+                    openVideo(data.url);
+                }
+            });
+        }
+    });
+
+
+    files = new Files();
+
+    stack = new Stack();
 
 });
+
+
+/**
+ * Helper to make things like '<button data-action="eventView.load()">' work
+ */
+function initActions() {
+
+    // Unbind the clicks, with the 'action' namespace.
+    $('button, input[type=button], a').off('click.action');
+
+    // Bind the clicks, with the 'action' namespace.
+    $('button, input[type=button], a').on('click.action', function(e){
+        var action = $(this).data('action');
+        if (typeof(action) != "undefined" && (action != "") ) {
+            eval(action);
+            e.preventDefault();
+        }
+    });
+
+}
+
+
+
+/**
+ * Initialize keyboard shortcuts:
+ * - Click 'save' in Edit content screen.
+ * - Click 'save' in "edit file" screen.
+ *
+ */
+function initKeyboardShortcuts() {
+
+    // We're on a regular 'edit content' page, if we have a sidebarsavecontinuebutton.
+    // If we're on an 'edit file' screen,  we have a #saveeditfile
+    if ( $('#sidebarsavecontinuebutton').is('*') || $('#saveeditfile').is('*') ) {
+
+        // Bind ctrl-s and meta-s for saving..
+        $('body, input').bind('keydown.ctrl_s keydown.meta_s', function(event) {
+            event.preventDefault();
+            $('form').watchChanges();
+            $('#sidebarsavecontinuebutton, #saveeditfile').trigger('click');
+        });
+
+        // Initialize watching for changes on "the form".
+        window.setTimeout(function(){
+            var $form = $('form').watchChanges();
+            console.log('watch');
+        }, 1000);
+
+        // Initialize handler for 'closing window'
+        window.onbeforeunload = confirmExit;
+
+        function confirmExit()
+        {
+            if ($('form').hasChanged()) {
+                return "You have unfinished changes on this page. If you continue without saving, you will lose these changes.";
+            }
+        }
+
+    }
+
+
+
+}
+
 
 
 /**
@@ -271,11 +350,11 @@ function bindFileUpload(key) {
                     if (file.error == undefined) {
                         var filename = decodeURI(file.url).replace("/files/", "");
                         $('#field-' + key).val(filename);
-                        $('#thumbnail-' + key).html("<img src='" + path + "../thumbs/120x120c/"+encodeURI(filename)+"' width='120' height='120'>");
+                        $('#thumbnail-' + key).html("<img src='" + path + "../thumbs/120x120c/"+encodeURI(filename) +"' width='120' height='120'>");
                         window.setTimeout(function(){ $('#progress-' + key).fadeOut('slow'); }, 1500);
 
                         // Add the uploaded file to our stack..
-                        addToStack(filename);
+                        stack.addToStack(filename);
 
                     } else {
                         alert("Oops! There was an error uploading the image. Make sure the image file is not corrupt, and that the 'files/'-folder is writable.");
@@ -526,25 +605,317 @@ function bindMarkdown(key) {
 }
 
 /**
- * Add a file to our simple Stack.
- *
- * @param string filename
- * @param string filepath
+ * Backbone object for all file actions functionality.
  */
-function addToStack(filename) {
-    console.log('add to stack: ', filename);
+var Files = Backbone.Model.extend({
 
-    $.ajax({
-        url: asyncpath + 'addstack/' + filename,
-        type: 'GET',
-        success: function(result) {
-            console.log('Added file to stack');
-        },
-        error: function() {
-            console.log('Failed to add file to stack');
+    defaults: {
+    },
+
+    initialize: function() {
+    },
+
+    /**
+     * Delete a file from the server.
+     *
+     * @param string filename
+     */
+    deleteFile: function(filename, element) {
+
+        if(!confirm('Are you sure you want to delete ' + filename + '?')) {
+            return;
         }
-    });
-}
+
+        $.ajax({
+            url: asyncpath + 'deletefile',
+            type: 'POST',
+            data: { 'filename': filename },
+            success: function(result) {
+                console.log('Deleted file ' + filename  + ' from the server');
+
+                // If we are on the files table, remove image row from the table, as visual feedback
+                if (element != null) {
+                    $(element).closest('tr').slideUp();
+                }
+
+                // TODO delete from Stack if applicable
+
+            },
+            error: function() {
+                console.log('Failed to delete the file from the server');
+            }
+        });
+    }
+
+});
+
+/**
+ * Backbone object for all Stack-related functionality.
+ */
+var Stack = Backbone.Model.extend({
+
+    defaults: {
+    },
+
+    /**
+     * If we have a 'stackholder' on the page, bind the uploader and file-selector.
+     */
+    initialize: function() {
+
+        if ($('#stackholder').is('*')) {
+            this.bindEvents();
+        }
+
+    },
+
+    bindEvents: function() {
+
+        bindFileUpload('stack');
+
+        // In the modal dialog, to navigate folders..
+        $('#selectImageModal-stack').on('click','.folder', function(e) {
+            e.preventDefault();
+            $('#selectImageModal-stack .modal-body').load($(this).attr('href'));
+        });
+
+    },
+
+    /**
+     * Add a file to our simple Stack.
+     *
+     * @param string filename
+     */
+    addToStack: function(filename, element) {
+
+        var ext = filename.substr(filename.lastIndexOf('.') + 1).toLowerCase();
+        if (ext == "jpg" || ext == "jpeg" || ext == "png" || ext == "gif" ) {
+            type = "image";
+        } else {
+            type = "other";
+        }
+
+        // We don't need 'files/' in the path. Accept intput with or without it, but strip
+        // it out here..
+        filename = filename.replace(/files\//ig, '');
+
+        $.ajax({
+            url: asyncpath + 'addstack/' + filename,
+            type: 'GET',
+            success: function(result) {
+                console.log('Added file ' + filename  + ' to stack');
+
+                // Move all current items one down, and remove the last one
+                var stack = $('#stackholder div.stackitem');
+                for (var i=stack.length; i>=1; i--) {
+                    var item = $("#stackholder div.stackitem.item-" + i);
+                    item.addClass('item-' + (i+1)).removeClass('item-' + i);
+                }
+                if ($("#stackholder div.stackitem.item-8").is('*')) {
+                    $("#stackholder div.stackitem.item-8").remove();
+                }
+
+                // If added via a button on the page, disable the button, as visual feedback
+                if (element != null) {
+                    $(element).addClass('disabled');
+                }
+
+                // Insert new item at the front..
+                if (type == "image") {
+                    var html = $('#protostack div.image').clone();
+                    $(html).find('img').attr('src', path + "../thumbs/100x100c/"+encodeURI(filename) );
+                } else {
+                    var html = $('#protostack div.other').clone();
+                    $(html).find('strong').html(ext.toUpperCase());
+                    $(html).find('small').html(filename);
+                }
+                $('#stackholder').prepend(html);
+            },
+            error: function() {
+                console.log('Failed to add file to stack');
+            }
+        });
+    },
+
+    selectFromPulldown: function(key, filename) {
+        console.log("select: ", key + " = " + filename);
+
+        // For "normal" file and image fields..
+        if ($('#field-' + key).is('*')) {
+            console.log('is!');
+            $('#field-' + key).val(filename);
+        }
+
+        // For Imagelist fields. Check if imagelist[key] is an object.
+        if (typeof imagelist == "object" && typeof imagelist[key] == "object") {
+            imagelist[key].add(filename, filename);
+        }
+
+        // If the field has a thumbnail, set it.
+        if ($('#thumbnail-' + key).is('*')) {
+            src = path + "../thumbs/120x120c/"+encodeURI( filename );
+            $('#thumbnail-' + key).html("<img src='" + src + "' width='120' height='120'>");
+        }
+
+        // Close the modal dialog, if this image/file was selected through one.
+        if ($('#selectModal-' + key).is('*')) {
+            $('#selectModal-' + key).modal('hide');
+        }
+
+        // If we need to place it on the stack as well, do so.
+        if (key == "stack") {
+            stack.addToStack(filename);
+        }
+
+    },
+
+    changeFolder: function(key, foldername) {
+        $('#selectModal-' + key + ' .modal-body').load(foldername);
+    }
+
+});
+
+
+var FileModel = Backbone.Model.extend({
+    defaults: {
+        id: null,
+        filename: null,
+        title: "Untitled file",
+        order: 1
+    },
+    initialize: function() {
+    }
+});
+var FilelistModel = Backbone.Model.extend({
+    defaults: {
+        id: null,
+        filename: null,
+        title: "Untitled file",
+        order: 1
+    },
+    initialize: function() {
+    }
+});
+
+var Filelist = Backbone.Collection.extend({
+    model: FilelistModel,
+    comparator: function(file) {
+        return file.get('order');
+    },
+    setOrder: function(id, order, title) {
+        _.each(this.models, function(item) {
+            if (item.get('id')==id) {
+                item.set('order', order);
+                item.set('title', title);
+            }
+        });
+    }
+});
+var FilelistHolder = Backbone.View.extend({
+
+    initialize: function(id) {
+        this.list = new Filelist();
+        var prelist = $('#'+this.id).val();
+        if (prelist != "") {
+            var prelist = $.parseJSON($('#'+this.id).val());
+            _.each(prelist, function(item){
+                var file = new FilelistModel({filename: item.filename, title: item.title, id: this.list.length });
+                this.list.add(file);
+            }, this);
+        }
+        this.render();
+        this.bindEvents();
+    },
+
+    render: function() {
+        this.list.sort();
+
+        var $list = $('#filelist-'+this.id+' .list');
+        $list.html('');
+        _.each(this.list.models, function(file){
+            var fileName = file.get('filename');
+            var html = "<div data-id='" + file.get('id') + "' class='ui-state-default'>" +
+                            "<span class='fileDescription'>" + fileName + "</span>" +
+                            "<input type='text' value='" +
+                            _.escape(file.get('title')) +
+                             "'><a href='#'><i class='icon-remove'></i></a></div>";
+            $list.append(html);
+        });
+        if (this.list.models.length == 0) {
+            $list.append("<p>No files in the list, yet.</p>");
+        }
+        this.serialize();
+    },
+
+    add: function(filename, title) {
+        var file = new FileModel({filename: filename, title: title, id: this.list.length });
+
+        this.list.add(file);
+        this.render();
+    },
+
+    remove: function(id) {
+        _.each(this.list.models, function(item) {
+            if (item.get('id') == id) {
+                this.list.remove(item);
+            }
+        }, this);
+        this.render();
+    },
+
+    serialize: function() {
+        var ser = JSON.stringify(this.list);
+        $('#'+this.id).val(ser);
+    },
+
+    doneSort: function() {
+        var list = this.list; // jQuery's .each overwrites 'this' scope, set it here..
+        $('#filelist-'+this.id+' .list div').each(function(index) {
+            var id = $(this).data('id');
+            var title = $(this).find('input').val()
+            list.setOrder(id, index, title);
+        });
+        this.render();
+    },
+
+    bindEvents: function() {
+        var $this = this,
+            contentkey = this.id,
+            $holder = $('#filelist-'+this.id);
+
+        $holder.find("div.list").sortable({
+            stop: function() {
+                $this.doneSort();
+            },
+            delay: 100,
+            distance: 5
+        });
+
+        $('#fileupload-' + contentkey).attr('name', 'files[]')
+            .fileupload({
+                dataType: 'json',
+                dropZone: $holder,
+                done: function (e, data) {
+                    $.each(data.result, function (index, file) {
+                        var filename = decodeURI(file.url).replace("/files/", "");
+                        $this.add(filename, filename);
+                    });
+                }
+            });
+
+        $holder.find("div.list").on('click', 'a', function(e) {
+            e.preventDefault();
+            if (confirm('Are you sure you want to remove this image?')) {
+                var id = $(this).parent().data('id');
+                $this.remove(id);
+            }
+        });
+
+        $holder.find("div.list").on('blur', 'input', function() {
+            $this.doneSort();
+        });
+    }
+});
+
 
 /**
  * Model, Collection and View for Imagelist.
@@ -691,3 +1062,23 @@ var ImagelistHolder = Backbone.View.extend({
 
     }
 });
+
+/*
+ * Konami Code For jQuery Plugin
+ *
+ * Using the Konami code, easily configure and Easter Egg for your page or any element on the page.
+ *
+ * Copyright 2011 - 2013 8BIT, http://8BIT.io
+ * Released under the MIT License
+ */(function(e){"use strict";e.fn.konami=function(t){var n,r,i,s,o,u,a,n=e.extend({},e.fn.konami.defaults,t);return this.each(function(){r=[38,38,40,40,37,39,37,39,66,65];i=[];e(window).keyup(function(e){s=e.keyCode?e.keyCode:e.which;i.push(s);if(10===i.length){o=!0;for(u=0,a=r.length;u<a;u++)r[u]!==i[u]&&(o=!1);o&&n.cheat();i=[]}})})};e.fn.konami.defaults={cheat:null}})(jQuery);
+
+
+function openVideo(url) {
+
+    var modal = '<div class="modal" id="myModal" tabindex="-1" role="dialog" aria-labelledby="myModalLabel" aria-hidden="true"><div class="modal-body">'
+        + url +
+        '</div><div class="modal-footer"><button class="btn" data-dismiss="modal" aria-hidden="true">Close</button></div></div>';
+
+    $('body').append(modal);
+
+}

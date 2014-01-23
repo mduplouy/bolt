@@ -2,7 +2,7 @@
 
 namespace Bolt;
 
-Use Silex;
+use Silex;
 
 class Content implements \ArrayAccess
 {
@@ -73,8 +73,34 @@ class Content implements \ArrayAccess
 
     }
 
+    /**
+     * Gets a list of the base columns that are hard-coded into all content
+     * types (rather than configured through contenttypes.yml).
+     */
+    public static function getBaseColumns()
+    {
+        return array(
+                'id',
+                'slug',
+                'datecreated',
+                'datechanged',
+                'datepublish',
+                'datedepublish',
+                'ownerid',
+                'status');
+
+    }
+
     public function setValues(Array $values)
     {
+
+        // Since Bolt 1.4, we use 'ownerid' instead of 'username' in the DB tables. If we get an array that has an
+        // empty 'ownerid', attempt to set it from the 'username'. In $this->setValue the user will be set, regardless
+        // of ownerid is an 'id' or a 'username'.
+        if (empty($values['ownerid']) && !empty($values['username'])) {
+            $values['ownerid'] = $values['username'];
+            unset($values['username']);
+        }
 
         foreach ($values as $key => $value) {
             $this->setValue($key, $value);
@@ -111,7 +137,7 @@ class Content implements \ArrayAccess
                 }
             }
 
-            if ($this->fieldtype($key)=="video" && is_array($this->values[$key]) && !empty($this->values[$key]['url']) ) {
+            if ($this->fieldtype($key)=="video" && is_array($this->values[$key]) && !empty($this->values[$key]['url'])) {
 
                 $video = $this->values[$key];
 
@@ -124,7 +150,7 @@ class Content implements \ArrayAccess
                 $responsiveclass = "responsive-video";
 
                 // See if it's widescreen or not..
-                if (!empty($video['height']) && ( ($video['width'] / $video['height']) > 1.76) ) {
+                if (!empty($video['height']) && ( ($video['width'] / $video['height']) > 1.76)) {
                     $responsiveclass .= " widescreen";
                 }
 
@@ -168,18 +194,20 @@ class Content implements \ArrayAccess
             $this->id = $value;
         }
 
-        if ($key == 'username') {
+        // Set the user in the object.
+        if ($key === 'ownerid' && !empty($value)) {
             $this->user = $this->app['users']->getUser($value);
         }
 
         // Only set values if they have are actually a field.
-        $allowedcolumns = array('id', 'slug', 'datecreated', 'datechanged', 'datepublish', 'datedepublish', 'username', 'status', 'taxonomy');
+        $allowedcolumns = self::getBaseColumns();
+        $allowedcolumns[] = 'taxonomy';
         if (!isset($this->contenttype['fields'][$key]) && !in_array($key, $allowedcolumns)) {
             return;
         }
 
         if ($key == 'datecreated' || $key == 'datechanged' || $key == 'datepublish') {
-            if ( !preg_match("/(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2}):(\d{2})/", $value) ) {
+            if (!preg_match("/(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2}):(\d{2})/", $value)) {
                 // @todo Try better date-parsing, instead of just setting it to 'now'..
                 $value = date("Y-m-d H:i:s");
             }
@@ -199,14 +227,30 @@ class Content implements \ArrayAccess
 
         $values = cleanPostedData($values);
 
-        // Make sure we set the correct username, if the current user isn't allowed to change it.
-        if (!$this->app['users']->isAllowed('editcontent:all')) {
-            $values['username'] = $this->app['users']->getCurrentUsername();
+        if (!$this->id) {
+            // this is a new record: current user becomes the owner.
+            $user = $this->app['users']->getCurrentUser();
+            $this['ownerid'] = $user['id'];
+        }
+
+        // If the owner is set explicitly, check if the current user is allowed
+        // to do this.
+        if (isset($values['ownerid'])) {
+            if ($this['ownerid'] != $values['ownerid']) {
+                if (!$this->app['users']->isAllowed("contenttype:$contenttype:change-ownership:{$this->id}")) {
+                    throw new \Exception("Changing ownership is not allowed.");
+                }
+                $this['ownerid'] = intval($values['ownerid']);
+            }
         }
 
         // Make sure we have a proper status..
         if (!in_array($values['status'], array('published', 'timed', 'held', 'draft'))) {
-            $values['status'] = "published";
+            if ($this['status']) {
+                $values['status'] = $this['status'];
+            } else {
+                $values['status'] = "draft";
+            }
         }
 
         // If we set a 'publishdate' in the future, and the status is 'published', set it to 'timed' instead.
@@ -254,10 +298,12 @@ class Content implements \ArrayAccess
                     continue; // Skip 'empty' uploads..
                 }
 
-                $filename = sprintf("%s/files/%s/%s",
+                $filename = sprintf(
+                    "%s/files/%s/%s",
                     $this->app['paths']['rootpath'],
                     date("Y-m"),
-                    safeString($file['name'][0], false, "[]{}()"));
+                    safeString($file['name'][0], false, "[]{}()")
+                );
                 $basename = sprintf("/%s/%s", date("Y-m"), safeString($file['name'][0], false, "[]{}()"));
 
                 if ($file['error'][0] != UPLOAD_ERR_OK) {
@@ -354,7 +400,7 @@ class Content implements \ArrayAccess
      * @param $value
      * @param int $sortorder
      */
-    public function setTaxonomy($taxonomytype, $value, $sortorder=0)
+    public function setTaxonomy($taxonomytype, $value, $sortorder = 0)
     {
 
         // If $value is an array, recurse over it, adding each one by itself.
@@ -457,11 +503,13 @@ class Content implements \ArrayAccess
     /**
      * Set the 'group', 'groupname' and 'sortorder' properties of the current object.
      *
-     * @param string $value
+     * @param $group
      * @param string $name
      * @param string $taxonomytype
+     * @param int $sortorder
+     * @internal param string $value
      */
-    public function setGroup($group, $name = "", $taxonomytype, $sortorder = 0)
+    public function setGroup($group, $name, $taxonomytype, $sortorder = 0)
     {
         $this->group = array(
             'slug' => $group,
@@ -505,8 +553,9 @@ class Content implements \ArrayAccess
                     $value = $this->preParse($this->values[$name]);
 
                     // Parse the field as Markdown, return HTML
-                    $markdownParser = new \dflydev\markdown\MarkdownParser();
-                    $value = $markdownParser->transformMarkdown($value);
+                    $value = \Parsedown::instance()->parse($value);
+                    $maid = new \Maid\Maid(array('output-format' => 'html'));
+                    $value = $maid->clean($value);
                     $value = new \Twig_Markup($value, 'UTF-8');
                     break;
 
@@ -520,6 +569,7 @@ class Content implements \ArrayAccess
                     break;
 
                 case 'imagelist':
+                case 'filelist':
                     // Parse the field as JSON, return the array
                     $value = json_decode($this->values[$name]);
                     break;
@@ -543,24 +593,25 @@ class Content implements \ArrayAccess
     {
 
         // Quickly verify that we actually need to parse the snippet!
-        if ( strpos($snippet, "{{")!==false || strpos($snippet, "{%")!==false || strpos($snippet, "{#")!==false ) {
+        if (strpos($snippet, "{{")!==false || strpos($snippet, "{%")!==false || strpos($snippet, "{#")!==false) {
 
             $snippet = html_entity_decode($snippet, ENT_QUOTES, 'UTF-8');
 
-            // There's a problem with Twig: parsing snippets that are longer than the filesystem limit for filenames.
-            // This is because Twig will _first_ attempt to locate the snippet as a file, and only _then_ parse it as a
-            // snippet. Therefore, if the snippet is too long, we split it, and parse it in several parts.
-            if (strlen($snippet) > 1800) {
-                // (First part), (opening twig brackets, rest of tag, closing twig brackets), (rest of string)
-                $result = preg_match('/(.*)({[{%#].*[}%#]})(.*)/ms', $snippet, $parts);
-                if ($result && count($parts)==4) {
-                    // Note: $parts[0] is always the entire snippet. We only need to parse parts 1, 2, 3..
-                    $snippet = $this->preParse($parts[1]) . $this->preParse($parts[2]) . $this->preParse($parts[3]);
-                }
-            } else {
-                // Render the snippet.
-                $snippet = $this->app['twig']->render($snippet);
-            }
+            // Remember the current Twig loaders.
+            $oldloader = $this->app['twig']->getLoader();
+
+            // Switch to the string loader.. this is the preferred option, but breaks {{ simpleform() }} in content.
+            // $this->app['twig']->setLoader(new \Twig_Loader_String());
+
+            // Add the the string loader..
+            // @TODO: Unfortunately, split the input again. :-(
+            $this->app['twig.loader']->addLoader(new \Twig_Loader_String());
+
+            // Parse the snippet.
+            $snippet = $this->app['render']->render($snippet);
+
+            // Re-set the loaders back to the old situation.
+            $this->app['twig']->setLoader($oldloader);
 
         }
 
@@ -686,7 +737,9 @@ class Content implements \ArrayAccess
 
         $slugreference = $this->getReference();
 
+        // Default link binding (a.k.a. "name of route in routing.yml"), unless overridden below.
         $linkbinding = 'contentlink';
+
         foreach ($this->app['config']->get('routing') as $binding => $route) {
             if (isset($route['recordslug']) && ($route['recordslug'] == $slugreference)) {
                 $linkbinding = $binding;
@@ -699,14 +752,43 @@ class Content implements \ArrayAccess
             }
         }
 
+        // Set up the 'parameters' to pass to url_generator->generate.
         $params = array(
             'contenttypeslug' => $this->contenttype['singular_slug'],
             'id' => $this->id,
             'slug' => $this->values['slug']
         );
-        foreach (array('datecreated', 'datepublish') as $key) {
-            $params[$key] = substr($this->values[$key], 0, 10);
+
+        // If we have any extra requirements, we should add the matching fields
+        // too. For example, if we need a routing with our own date field:
+        //   requirements:
+        //     eventdate: '\d{4}-\d{2}-\d{2}'
+        if (is_array($route['requirements']) && !empty($route['requirements'])) {
+            foreach($route['requirements'] as $req => $reqvalue) {
+
+                // Don't override params that are already set!
+                if (isset($params[$req])) {
+                    continue;
+                }
+
+                // special case, if we need to have a date.
+                if ($reqvalue == '\d{4}-\d{2}-\d{2}') {
+                    $params[$req] = substr($this->values[$req], 0, 10);
+                } elseif (isset($this->taxonomy[$req])) {
+                    // turn something like '/chapters/meta' to 'meta'
+                    $taxonomyslug = explode( '/', array_shift(array_keys($this->taxonomy[$req])) );
+                    $taxonomyslug = array_pop($taxonomyslug);
+                    $params[$req] = $taxonomyslug;
+                } else {
+                    // or, just add the value.
+                    $params[$req] = $this->values[$req];
+                }
+            }
         }
+
+        // Filter empty values and then use the route's defaults values.
+        $params = array_filter($params);
+        $params = array_merge($route['defaults'], $params);
 
         $link = $this->app['url_generator']->generate($linkbinding, $params);
 
@@ -722,7 +804,7 @@ class Content implements \ArrayAccess
     /**
      * Get the previous record. ('previous' is defined as 'latest one published before this one')
      */
-    public function previous($field = "datepublish")
+    public function previous($field = "datepublish", $where = array())
     {
         $field = safeString($field);
 
@@ -733,7 +815,7 @@ class Content implements \ArrayAccess
             'returnsingle' => true
         );
 
-        $previous = $this->app['storage']->getContent($this->contenttype['singular_slug'], $params);
+        $previous = $this->app['storage']->getContent($this->contenttype['singular_slug'], $params, $dummy, $where);
 
         return $previous;
 
@@ -742,7 +824,7 @@ class Content implements \ArrayAccess
     /**
      * Get the next record. ('next' is defined as 'first one published after this one')
      */
-    public function next($field = "datepublish")
+    public function next($field = "datepublish", $where = array())
     {
         $field = safeString($field);
 
@@ -753,7 +835,7 @@ class Content implements \ArrayAccess
             'returnsingle' => true
         );
 
-        $next = $this->app['storage']->getContent($this->contenttype['singular_slug'], $params);
+        $next = $this->app['storage']->getContent($this->contenttype['singular_slug'], $params, $dummy, $where);
 
         return $next;
 
@@ -765,7 +847,7 @@ class Content implements \ArrayAccess
      * Gets one or more related records.
      *
      */
-    public function related($filtercontenttype="", $filterid="")
+    public function related($filtercontenttype = "", $filterid = "")
     {
 
         if (empty($this->relation)) {
@@ -777,13 +859,13 @@ class Content implements \ArrayAccess
 
         foreach ($this->relation as $contenttype => $ids) {
 
-            if (!empty($filtercontenttype) && ($contenttype!=$filtercontenttype) ) {
+            if (!empty($filtercontenttype) && ($contenttype!=$filtercontenttype)) {
                 continue; // Skip other contenttypes, if we requested a specific type.
             }
 
             foreach ($ids as $id) {
 
-                if (!empty($filterid) && ($id!=$filterid) ) {
+                if (!empty($filterid) && ($id!=$filterid)) {
                     continue; // Skip other ids, if we requested a specific id.
                 }
 
@@ -811,6 +893,11 @@ class Content implements \ArrayAccess
         $template = $this->app['config']->get('general/record_template');
         $chosen = 'config';
 
+        $templatefile = $this->app['paths']['themepath'] . "/" . $this->contenttype['singular_slug'] . ".twig";
+        if (is_readable($templatefile)) {
+            $template = $this->contenttype['singular_slug'] . ".twig";
+            $chosen = 'singular_slug';
+        }
 
         if (isset($this->contenttype['record_template'])) {
             $templatefile = $this->app['paths']['themepath'] . "/" . $this->contenttype['record_template'];
@@ -820,14 +907,8 @@ class Content implements \ArrayAccess
             }
         }
 
-        $templatefile = $this->app['paths']['themepath'] . "/" . $this->contenttype['singular_slug'] . ".twig";
-        if (is_readable($templatefile)) {
-            $template = $this->contenttype['singular_slug'] . ".twig";
-            $chosen = 'singular_slug';
-        }
-
         foreach ($this->contenttype['fields'] as $name => $field) {
-            if ($field['type']=="templateselect" && !empty($this->values[$name]) ) {
+            if ($field['type']=="templateselect" && !empty($this->values[$name])) {
                 $template = $this->values[$name];
                 $chosen = 'record';
             }
@@ -903,14 +984,11 @@ class Content implements \ArrayAccess
             if ($this->fieldtype($field) == 'html') {
                 $value = $this->values[$field];
                 // Completely remove style and script blocks
-                // Remove script tags
-                $value = preg_replace('/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/i', '', $value);
-                // Remove style tags
-                $value = preg_replace('/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/i', '', $value);
-                // Strip other tags
-                // How about 'blockquote'?
-                $allowedTags = array('a', 'br', 'hr', 'h1', 'h2', 'h3', 'h4', 'p', 'strong', 'em', 'u', 'strike');
-                $result = strip_tags($value, '<' . implode('><', $allowedTags) . '>');
+                $maid = new \Maid\Maid(array(
+                    'allowed-tags' => array('a', 'b', 'br', 'hr', 'h1', 'h2', 'h3', 'h4', 'p', 'strong', 'em', 'i', 'u', 'strike', 'ul', 'ol', 'li', 'img'),
+                    'output-format' => 'html'
+                ));
+                $result = $maid->clean($value);
                 if ($excerptLength > 0) {
                     $result = trimText($result, $excerptLength, false, true, false);
                 }
@@ -941,7 +1019,7 @@ class Content implements \ArrayAccess
             // a complete match is 100% of the maximum
             return round((100/100) * $max);
         }
-        if (strstr($low_subject,$complete)) {
+        if (strstr($low_subject, $complete)) {
             // when the whole query is found somewhere is 70% of the maximum
             return round((70/100) * $max);
         }
@@ -949,13 +1027,14 @@ class Content implements \ArrayAccess
         $word_matches = 0;
         $cnt_words    = count($words);
         for ($i=0; $i < $cnt_words; $i++) {
-            if (strstr(' '.$low_subject.' ',' '.$words[$i].' ')) {
+            if (strstr($low_subject, $words[$i])) {
                 $word_matches++;
             }
         }
         if ($word_matches > 0) {
-            // word matches are maximum of 50% of the maximum per word
-            return round(($word_matches/$cnt_words) * (50/100) * $max);
+            // marcel: word matches are maximum of 50% of the maximum per word
+            // xiao: made (100/100) instead of (50/100).
+            return round(($word_matches/$cnt_words) * (100/100) * $max);
         }
 
         return 0;
@@ -976,7 +1055,7 @@ class Content implements \ArrayAccess
 
         foreach ($this->contenttype['fields'] as $key => $config) {
             if (in_array($config['type'], $searchable_types)) {
-                $fields[$key] = 50;
+                $fields[$key] = isset($config['searchweight']) ? $config['searchweight'] : 50;
             }
         }
 
@@ -985,14 +1064,33 @@ class Content implements \ArrayAccess
 
             if ($config['type'] == 'slug') {
                 foreach ($config['uses'] as $ptr_field) {
-                    if (isset($fields[$key])) {
-                        $fields[$key] = 100;
+                    if (isset($fields[$ptr_field])) {
+                        $fields[$ptr_field] = 100;
                     }
                 }
             }
         }
 
         return $fields;
+    }
+
+    /**
+     * Calculate the default taxonomy weights
+     *
+     * Adds weights to taxonomies that behave like tags
+     */
+    private function getTaxonomyWeights()
+    {
+        $taxonomies = array();
+
+        if (isset($this->contenttype['taxonomy'])) {
+            foreach ($this->contenttype['taxonomy'] as $key) {
+                if ($this->app['config']->get('taxonomy/'.$key.'/behaves_like') == 'tags') {
+                    $taxonomies[$key] = $this->app['config']->get('taxonomy/'.$key.'/searchweight', 75);
+                }
+            }
+        }
+        return $taxonomies;
     }
 
     /**
@@ -1005,16 +1103,30 @@ class Content implements \ArrayAccess
     public function weighSearchResult($query)
     {
         static $contenttype_fields = null;
+        static $contenttype_taxonomies = null;
 
         $ct = $this->contenttype['slug'];
         if ((is_null($contenttype_fields)) || (!isset($contenttype_fields[$ct]))) {
             // Should run only once per contenttype (e.g. singlular_name)
             $contenttype_fields[$ct] = $this->getFieldWeights();
+            $contenttype_taxonomies[$ct] = $this->getTaxonomyWeights();
         }
 
         $weight = 0;
+
+        // Go over all field, and calculate the overall weight.
         foreach ($contenttype_fields[$ct] as $key => $field_weight) {
             $weight += $this->weighQueryText($this->values[$key], $query['use_q'], $query['words'], $field_weight);
+        }
+
+        // Go over all taxonomies, and calculate the overall weight.
+        foreach ($contenttype_taxonomies[$ct] as $key => $taxonomy) {
+
+            // skip empty taxonomies.
+            if (empty($this->taxonomy[$key])) {
+                continue;
+            }
+            $weight += $this->weighQueryText(implode(' ', $this->taxonomy[$key]), $query['use_q'], $query['words'], $taxonomy);
         }
 
         $this->last_weight = $weight;

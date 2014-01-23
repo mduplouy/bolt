@@ -1,5 +1,10 @@
 {% include '_header_basic.twig' with { 'class': 'popup' } %}
 
+{# Only show the stack on the topmost level. #}
+{% if path == "files" %}
+    {# Show the stack with the latest items. #}
+    {{ render(path("showstack", {'items': 7, 'options': 'minimal' } )) }}
+{% endif %}
 
 <h1>{{ __('Files: %path%',{'%path%':path}) }}</h1>
 
@@ -43,18 +48,19 @@
                         {% endif %}
                     </td>
                     <td>{{ file.filesize }}.</td>
-                    <td>{% if file.imagesize is defined %}{{ file.imagesize }} px.{% endif %}</td>
+                    <td>{% if file.imagesize is defined %}{{ file.imagesize }} {{ __('px.') }}{% endif %}</td>
                     <td class='listthumb'>
                         {{file.newpath|showimage(54, 40, 'c')}}
                     </td>
                     <td>
-                        <a href="{{ file.newpath|thumbnail(1000, 1000, 'r') }}" class="btn btn-mini fancybox" rel='fancybox' title="Image: {{ file.filename }}">Preview</a>
+                        <a href="{{ file.newpath|thumbnail(1000, 1000, 'r') }}" class="btn btn-mini fancybox" rel='fancybox' title="Image: {{ file.filename }}">{{ __('Preview') }}</a>
                     </td>
                 </tr>
             {% endif %}
         {% endfor %}
     </table>
 {% endif %}
+
 
 <script type='text/javascript'>
 

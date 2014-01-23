@@ -26,7 +26,7 @@ on our code base [here](https://scrutinizer-ci.com/g/bolt/bolt/inspections).
 Installation
 ------------
 
-Detailed instructions can be found in the [Setup section in the documentation](http://docs.bolt.cm/setup).
+Detailed instructions can be found in the [Installation section in the documentation](http://docs.bolt.cm/installation).
 
 Reporting issues
 ----------------
@@ -65,3 +65,6 @@ Currently, these are the third party extensions we're aware of:
 
 The extensions can be placed in the `app/extensions` folder.
 Learn more about writing extensions from our [docs](https://github.com/bolt/bolt-docs/blob/master/source/extensions.md)
+
+[![Bitdeli Badge](https://d2weczhvl823v0.cloudfront.net/bolt/bolt/trend.png)](https://bitdeli.com/free "Bitdeli Badge")
+

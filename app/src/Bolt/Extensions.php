@@ -111,10 +111,10 @@ class Extensions
 
         $folders = array();
 
-        $d = dir($this->basefolder);
+        $dir = dir($this->basefolder);
 
         // Make a list of extensions, actually present..
-        while (false !== ($foldername = $d->read())) {
+        while (false !== ($foldername = $dir->read())) {
 
             if (in_array($foldername, $this->ignored) || substr($foldername, 0, 2) == "._") {
                 continue;
@@ -126,7 +126,7 @@ class Extensions
 
         }
 
-        $d->close();
+        $dir->close();
 
         $this->enabled = array_intersect($list, $folders);
 
@@ -141,11 +141,11 @@ class Extensions
     public function getInfo()
     {
 
-        $d = dir($this->basefolder);
+        $dir = dir($this->basefolder);
 
         $info = array();
 
-        while (false !== ($entry = $d->read())) {
+        while (false !== ($entry = $dir->read())) {
 
             if (in_array($entry, $this->ignored) || substr($entry, 0, 2) == "._") {
                 continue;
@@ -156,7 +156,7 @@ class Extensions
             }
 
         }
-        $d->close();
+        $dir->close();
 
         ksort($info);
 
@@ -340,11 +340,11 @@ class Extensions
                 if ($type == $widget['type'] && $location == $widget['location']) {
 
                     $html = sprintf(
-                        "<section><div class='widget' id='widget-%s' data-key='%s'>%s</div>%s</section>"
-                        , $widget['key']
-                        , $widget['key']
-                        , $this->renderWidget($widget['key'])
-                        , empty($widget['additionalhtml']) ? '' : "\n" . $widget['additionalhtml']
+                        "<section><div class='widget' id='widget-%s' data-key='%s'>%s</div>%s</section>",
+                        $widget['key'],
+                        $widget['key'],
+                        $this->renderWidget($widget['key']),
+                        empty($widget['additionalhtml']) ? '' : "\n" . $widget['additionalhtml']
                     );
 
                     echo $html;
@@ -795,6 +795,7 @@ class Extensions
      *
      * @param  string $tag
      * @param  string $html
+     * @param bool $insidehead
      * @return string
      */
     public function insertAfterJs($tag, $html, $insidehead = true)
@@ -856,30 +857,30 @@ class Extensions
 
 
     /**
-     * Add a menu-option to the 'settings' menu. Note that the item is only added if the current user
-     * has a sufficient high enough userlevel
+     * Add a menu option to the 'settings' menu. Note that the item is only added if the current user
+     * meets the required permission.
      *
      * @see \Bolt\BaseExtension\addMenuOption()
      *
      * @param string $label
      * @param string $path
      * @param bool $icon
-     * @param int $userlevel
+     * @param string $requiredPermission (NULL if no permission is required)
      */
-    public function addMenuOption($label, $path, $icon = false, $userlevel = 2)
+    public function addMenuOption($label, $path, $icon = false, $requiredPermission = null)
     {
+        // Fix the path, if we have not given a full path..
+        if (strpos($path, '/') === false) {
+            $path = $this->app['paths']['bolt'] . $path;
+        }
 
-        if ($this->app['users']->currentuser['userlevel'] >= $userlevel) {
-
+        if (empty($requiredPermission) || $this->app['users']->isAllowed($requiredPermission)) {
             $this->menuoptions[$path] = array(
                 'label' => $label,
                 'path' => $path,
-                'icon' => $icon,
-                'userlevel' => $userlevel
+                'icon' => $icon
             );
-
         }
-
     }
 
     /**
@@ -919,5 +920,4 @@ class Extensions
         return $key;
 
     }
-
 }

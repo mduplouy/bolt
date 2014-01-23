@@ -61,7 +61,7 @@ class LowlevelChecks
         // this check. Plus we can't really tell whether what's *inside*
         // htaccess is doing the right thing or not.
         if (!is_readable(BOLT_WEB_DIR.'/.htaccess')) {
-            $this->lowlevelError("The file <code>" . 
+            $this->lowlevelError("The file <code>" .
                 htmlspecialchars(BOLT_WEB_DIR, ENT_QUOTES) .
                 "/.htaccess</code> doesn't exist. Make sure it's " .
                 "present and readable to the user that the webserver is using.");
@@ -73,6 +73,7 @@ class LowlevelChecks
         $this->lowlevelConfigFix('contenttypes');
         $this->lowlevelConfigFix('taxonomy');
         $this->lowlevelConfigFix('routing');
+        $this->lowlevelConfigFix('permissions');
 
         // $this->lowlevelError("Done");
 
@@ -153,7 +154,7 @@ class LowlevelChecks
             return; // Okidoki..
         }
 
-        if (!@rename($distname, $ymlname)) {
+        if (!@copy($distname, $ymlname)) {
             $message = sprintf("Couldn't create a new <code>%s</code>-file. Create the file manually by copying
                 <code>%s</code>, and optionally make it writable to the user that the webserver is using.",
                 htmlspecialchars($name . ".yml", ENT_QUOTES),
@@ -163,6 +164,7 @@ class LowlevelChecks
         }
 
     }
+
 
     /**
      * Print a 'low level' error page, and quit. The user has to fix something.
@@ -211,8 +213,8 @@ class LowlevelChecks
     out. Be sure to include the exact error message you're getting!</p>
 
     <ul>
-        <li><a href="http://docs.bolt.cm/setup">Bolt documentation - Setup</a></li>
-        <li><a href="http://forum.pivotx.net/viewforum.php?f=17">Bolt discussion forum</a></li>
+        <li><a href="http://docs.bolt.cm/installation">Bolt documentation - Setup</a></li>
+        <li><a href="http://forum.pivotx.net/viewforum.php?f=16">Bolt discussion forum</a></li>
     </ul>
 
     </div>

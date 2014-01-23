@@ -11,12 +11,12 @@ class DatabaseCheck extends BaseCommand
     {
         $this
             ->setName('database:check')
-            ->setDescription('Check the database for missing columns.');
+            ->setDescription('Check the database for missing tables and/or columns.');
     }
 
     protected function execute(InputInterface $input, OutputInterface $output)
     {
-        $messages = $this->app['storage']->getIntegrityChecker()->checkTablesIntegrity();
+        $messages = $this->app['integritychecker']->checkTablesIntegrity();
 
         if (!empty($messages)) {
             $output->writeln("<info>Modifications required:</info>");

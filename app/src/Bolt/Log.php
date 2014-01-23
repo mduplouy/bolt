@@ -203,7 +203,7 @@ class Log
     /**
      * Getting all previously set values
      *
-     * @param  string $key
+     * @internal param string $key
      * @return array
      */
     public function getValues()
@@ -215,12 +215,14 @@ class Log
 
     public function trim()
     {
-        $query = sprintf("DELETE FROM %s WHERE level='1';",
+        $query = sprintf(
+            "DELETE FROM %s WHERE level='1';",
             $this->tablename
         );
         $this->app['db']->executeQuery($query);
 
-        $query = sprintf("DELETE FROM %s WHERE level='2' AND date < '?';",
+        $query = sprintf(
+            "DELETE FROM %s WHERE level='2' AND date < ?;",
             $this->tablename
         );
 
@@ -230,7 +232,8 @@ class Log
             array(\PDO::PARAM_STR)
         );
 
-        $query = sprintf("DELETE FROM %s WHERE date < '?';",
+        $query = sprintf(
+            "DELETE FROM %s WHERE date < ?;",
             $this->tablename
         );
         $this->app['db']->executeQuery(
@@ -245,25 +248,27 @@ class Log
     {
         $configdb = $this->app['config']->getDBOptions();
 
-        if (isset($configdb['driver']) && ( $configdb['driver'] == "pdo_sqlite" ) ) {
+        if (isset($configdb['driver']) && ($configdb['driver'] == "pdo_sqlite")) {
 
             // sqlite
-            $query = sprintf("DELETE FROM %s; UPDATE SQLITE_SEQUENCE SET seq = 0 WHERE name = ?;",
+            $query = sprintf(
+                "DELETE FROM %s; UPDATE SQLITE_SEQUENCE SET seq = 0 WHERE name = '%s'",
+                $this->tablename,
                 $this->tablename
             );
 
         } else {
 
             // mysql
-            $query = sprintf('TRUNCATE %s;',
+            $query = sprintf(
+                'TRUNCATE %s;',
                 $this->tablename
             );
 
         }
         // @todo: handle postgres (and other non mysql) database syntax
 
-        $this->app['db']->executeQuery($query, array($this->tablename), array(\PDO::PARAM_STR));
+        $this->app['db']->executeQuery($query);
 
     }
-
 }

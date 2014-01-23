@@ -1,43 +1,45 @@
 <?php
-// Redirector Extension 0.9 for Bolt
+// Redirector Extension 0.9.2 for Bolt
+// by Foundry Code / Mike Anthony
 // Minimum Bolt version: 1.2
-// http://code.foundrybusiness.co.za/bolt-redirector
+// code.foundrybusiness.co.za/bolt-redirector
+// Released under the MIT License
 
 namespace Redirector;
 
-use Bolt\BaseExtension as BoltExtension;
-use Silex\Application as Silex;
+use Bolt\BaseExtension;
+use Silex\Application;
 use Symfony\Component\HttpFoundation\Request;
 
-class Extension extends BoltExtension
+class Extension extends BaseExtension
 {
     public $wildcards = array(
         'all' => '.*',
         'alpha' => '[a-z]+',
-        'num' => '[0-9]+',
         'alphanum' => '[a-z0-9]+',
         'any' => '[a-z0-9\.\-_%\=\s]+',
+        'ext' => 'aspx?|f?cgi|s?html?|jhtml|rbml|jsp|phps?',
+        'num' => '[0-9]+',
         'segment' => '[a-z0-9\-_]+',
         'segments' => '[a-z0-9\-_/]+',
-        'ext' => 'aspx?|f?cgi|s?html?|jhtml|rbml|jsp|phps?',
     );
 
     public $smartWildcards = array(
-        'path' => 'segments',
-        'name|title|page|post|user|model' => 'segment',
-        'year|month|day|id' => 'num',
         'ext' => 'ext',
+        'name|title|page|post|user|model' => 'segment',
+        'path' => 'segments',
+        'year|month|day|id' => 'num',
     );
 
     public $errors = array (
         'assertion_invalid' => 'Invalid assertion condition supplied. Please provide a boolean condition.',
         'inavlid_variable_declaration' => 'Invalid variable declaration: A valid variable declaration starts with a letter or underscore, followed by any number of letters, numbers, or underscores.',
+        'missing_variables' => 'Un-processed variable in redirect destination. Please add the `%s` variable to the `variables` group in `Redirector/config.yml`. (Destination: `%s`)',
         'string_lh_destination' => 'Redirect destination must be a string.',
         'string_lh_jitsource' => 'JIT source must be a string.',
         'string_lh_source' => 'Redirect source must be a string.',
         'string_sh_jitsource' => 'Short-hand JIT source must be a string.',
         'string_sh_source' => 'Short-hand redirect source must be a string.',
-        'missing_variables' => 'Un-processed variable in redirect destination. Please add the `%s` variable to the `variables` group in Redirector/config.yml. (Destination: %s)',
     );
 
     /**
@@ -50,16 +52,16 @@ class Extension extends BoltExtension
     {
         $data = array(
             'name' => 'Redirector',
-            'version' => '0.9',
+            'version' => '0.9.2',
             'author' => 'Mike Anthony / Foundry Code',
             'description' => 'A wicked little extension that allows you to perform any pre-app <code>301 Moved Permanently</code> redirects',
             'type' => 'SEO Enhancement',
             'link' => 'http://code.foundrybusiness.co.za/bolt-redirector',
             'support_email' => 'code@foundrybusiness.co.za',
             'first_releasedate' => '2013-09-10',
-            'latest_releasedate' => '2013-09-18',
+            'latest_releasedate' => '2013-09-30',
             'required_bolt_version' => '1.2',
-            'highest_bolt_version' => '1.2.1'
+            'highest_bolt_version' => '1.3'
         );
 
         return $data;
@@ -72,9 +74,6 @@ class Extension extends BoltExtension
      */
     public function initialize()
     {
-        // Get the routing.yml configuration
-        $this->routes = $this->app->config->get('routing');
-
         // Get the extension's configuration
         $this->initializeConfiguration();
 
@@ -85,10 +84,15 @@ class Extension extends BoltExtension
     /**
      * Initialise the extension's configuration
      *
+     * Last Fix: 23 Sept 2013 - Take 'empty groups' from the .yml file into account. [Responsible: @bobdenotter]
+     *
      * @return void
      */
     public function initializeConfiguration()
     {
+        // Get the routing.yml configuration
+        $this->routes = $this->app['config']->get('routing');
+
         // Set the configuration defaults
         $config = array(
             'options' => array(
@@ -107,7 +111,12 @@ class Extension extends BoltExtension
         // Assign configuration groups to arrays in object
         $configGroups = array('options', 'redirects', 'jits', 'variables');
         foreach($configGroups as $group) {
-            $this->$group = $this->config[$group];
+            if (!empty($this->config[$group])) {
+                $this->$group = $this->config[$group];
+            } else {
+                // Take 'empty groups' from the .yml file into account.
+                $this->$group = array();
+            }
         }
     }
 
@@ -159,7 +168,7 @@ class Extension extends BoltExtension
      * Check for a redirect. If it exists, then redirect to it's
      * converted replacement.
      *
-     * @return void|RedirectResponse
+     * @return void
      */
     public function handleRedirects()
     {
@@ -261,7 +270,7 @@ class Extension extends BoltExtension
 
                     // Merge global variables with those defined by the user
                     $self->variables = array_merge($self->variables, array(
-                        'admin_path' => $app->config->get('general/branding/path'),
+                        'admin_path' => $app['config']->get('general/branding/path'),
                     ));
                     // Replace variables with actual data
                     foreach ($self->variables as $variable => $data) {
@@ -297,6 +306,6 @@ class Extension extends BoltExtension
                     return $app->redirect(strtolower("{$self->prefix}{$convertedWildcards}{$self->sourceQueryString}"), 301);
                 }
             }
-        }, Silex::EARLY_EVENT);
+        }, Application::EARLY_EVENT);
     }
 }

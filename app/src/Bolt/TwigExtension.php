@@ -28,7 +28,9 @@ class TwigExtension extends \Twig_Extension
     public function getFunctions()
     {
         return array(
-            new \Twig_SimpleFunction('print', array($this, 'printDump'), array('is_safe' => array('html'))),
+            new \Twig_SimpleFunction('print', array($this, 'printDump'), array('is_safe' => array('html'))), // Deprecated..
+            new \Twig_SimpleFunction('dump', array($this, 'printDump'), array('is_safe' => array('html'))),
+            new \Twig_SimpleFunction('backtrace', array($this, 'printBacktrace'), array('is_safe' => array('html'))),
             new \Twig_SimpleFunction('excerpt', array($this, 'excerpt'), array('is_safe' => array('html'))),
             new \Twig_SimpleFunction('trimtext', array($this, 'trim'), array('is_safe' => array('html'))),
             new \Twig_SimpleFunction('markdown', array($this, 'markdown'), array('is_safe' => array('html'))),
@@ -55,7 +57,9 @@ class TwigExtension extends \Twig_Extension
             new \Twig_SimpleFunction('last', array($this, 'last')),
             new \Twig_SimpleFunction('__', array($this, 'trans'), array('is_safe' => array('html'))),
             new \Twig_SimpleFunction('redirect', array($this, 'redirect'), array('is_safe' => array('html'))),
-            new \Twig_SimpleFunction('stackitems', array($this, 'stackitems'))
+            new \Twig_SimpleFunction('stackitems', array($this, 'stackitems')),
+            new \Twig_SimpleFunction('stacked', array($this, 'stacked')),
+            new \Twig_SimpleFunction('imageinfo', array($this, 'imageinfo'))
         );
     }
 
@@ -68,8 +72,11 @@ class TwigExtension extends \Twig_Extension
             new \Twig_SimpleFilter('rot13', array($this, 'rot13Filter')),
             new \Twig_SimpleFilter('trimtext', array($this, 'trim'), array('is_safe' => array('html'))),
             new \Twig_SimpleFilter('markdown', array($this, 'markdown'), array('is_safe' => array('html'))),
+            new \Twig_SimpleFilter('tt', array($this, 'decorateTT'), array('is_safe' => array('html'))),
             new \Twig_SimpleFilter('ucfirst', array($this, 'ucfirst')),
             new \Twig_SimpleFilter('excerpt', array($this, 'excerpt'), array('is_safe' => array('html'))),
+            new \Twig_SimpleFilter('ymllink', array($this, 'ymllink'), array('is_safe' => array('html'))),
+            new \Twig_SimpleFilter('slug', array($this, 'slug')),
             new \Twig_SimpleFilter('current', array($this, 'current')),
             new \Twig_SimpleFilter('thumbnail', array($this, 'thumbnail')),
             new \Twig_SimpleFilter('image', array($this, 'image')),
@@ -80,15 +87,19 @@ class TwigExtension extends \Twig_Extension
             new \Twig_SimpleFilter('first', array($this, 'first')),
             new \Twig_SimpleFilter('last', array($this, 'last')),
             new \Twig_SimpleFilter('__', array($this, 'trans'), array('is_safe' => array('html'))),
+            new \Twig_SimpleFilter('safestring', array($this, 'safestring'), array('is_safe' => array('html'))),
+            new \Twig_SimpleFilter('round', array($this, 'round')),
+            new \Twig_SimpleFilter('floor', array($this, 'floor')),
+            new \Twig_SimpleFilter('ceil', array($this, 'ceil')),
+            new \Twig_SimpleFilter('imageinfo', array($this, 'imageinfo'))
         );
     }
 
 
     /**
-     * Output pretty-printed arrays.
+     * Output pretty-printed arrays / objects.
      *
-     * @see util::php
-     * @see http://brandonwamboldt.github.com/utilphp/
+     * @see \Dumper::dump
      *
      * @param  mixed $var
      * @return string
@@ -96,9 +107,22 @@ class TwigExtension extends \Twig_Extension
     public function printDump($var)
     {
 
-        $output = util::var_dump($var, true);
+        return \Dumper::dump($var, DUMPER_CAPTURE);
 
-        return $output;
+    }
+
+    /**
+     * Output pretty-printed backtrace.
+     *
+     * @see \Dumper::backtrace
+     *
+     * @param  mixed $var
+     * @return string
+     */
+    public function printBacktrace($depth = 15)
+    {
+
+        return \Dumper::backtrace($depth, true);
 
     }
 
@@ -133,13 +157,17 @@ class TwigExtension extends \Twig_Extension
             $dateTime = new \DateTime($dateTime);
         }
 
-        $locale = array(
-            $this->app['config']->get('general/locale'),
-            $this->app['config']->get('general/locale') . '.utf8',
-            'en_GB', 'en_GB.utf8', 'en'
-        );
 
-        $result = setlocale(LC_ALL, $locale);
+        // Check for Windows to find and replace the %e modifier correctly
+        // @see: http://php.net/strftime
+        if (strtoupper(substr(PHP_OS, 0, 3)) == 'WIN') {
+            $format = preg_replace('#(?<!%)((?:%%)*)%e#', '\1%#d', $format);
+        }
+
+        // According to http://php.net/manual/en/function.setlocale.php manual
+        // if the second parameter is "0", the locale setting is not affected,
+        // only the current setting is returned.
+        $result = setlocale(LC_ALL, 0);
         if ($result === false) {
             // This shouldn't occur, but.. Dude!
             // You ain't even got locale or English on your platform??
@@ -179,9 +207,21 @@ class TwigExtension extends \Twig_Extension
 
         } elseif (is_array($content)) {
             // Assume it's an array, strip some common fields that we don't need, implode the rest..
-            unset($content['id'], $content['slug'], $content['datecreated'], $content['datechanged'],
-            $content['username'], $content['title'], $content['contenttype'], $content['status'], $content['taxonomy']
-            );
+            $stripKeys = array(
+                    'id',
+                    'slug',
+                    'datecreated',
+                    'datechanged',
+                    'username',
+                    'ownerid',
+                    'title',
+                    'contenttype',
+                    'status',
+                    'taxonomy',
+                    );
+            foreach ($stripKeys as $key) {
+                unset($content[$key]);
+            }
             $output = implode(" ", $content);
 
         } elseif (is_string($content)) {
@@ -197,6 +237,105 @@ class TwigExtension extends \Twig_Extension
         $output = trimText(strip_tags($output), $length);
 
         return $output;
+
+    }
+
+
+    /**
+     * Create a link to edit a .yml file, if a filename is detected in the string. Mostly
+     * for use in Flashbag messages, to allow easy editing.
+     *
+     * @param string $str
+     * @return string Resulting string
+     */
+    public function ymllink($str)
+    {
+
+        if (preg_match("/ ([a-z0-9_-]+\.yml)/i", $str, $matches)) {
+            $path = path('fileedit', array('file' => "app/config/" . $matches[1]));
+            $link = sprintf(" <a href='%s'>%s</a>", $path, $matches[1]);
+            $str = preg_replace("/ ([a-z0-9_-]+\.yml)/i", $link, $str);
+        }
+
+        return $str;
+
+    }
+
+
+
+    /**
+     * Get an array with the dimensions of an image, together with its
+     * aspectratio and some other info.
+     *
+     * @param string $filename
+     * @return array Specifics
+     */
+    public function imageinfo($filename)
+    {
+
+        $fullpath = sprintf("%s/%s", $this->app['paths']['filespath'], $filename);
+
+        if (!is_readable($fullpath) || !is_file($fullpath)) {
+            return false;
+        }
+
+        $types = array(
+            0=>'unknown',
+            1=>'gif',
+            2=>'jpeg',
+            3=>'png',
+            4=>'swf',
+            5=>'psd',
+            6=>'bmp'
+        );
+
+        // Get the dimensions of the image
+        $imagesize = getimagesize($fullpath);
+
+        // Get the aspectratio
+        if ($imagesize[1] > 0) {
+            $ar = $imagesize[0] / $imagesize[1];
+        } else {
+            $ar = 0;
+        }
+
+        $info = array(
+            'width' => $imagesize[0],
+            'height' => $imagesize[1],
+            'type' => $types[ $imagesize[2] ],
+            'mime' => $imagesize['mime'],
+            'aspectratio' => $ar,
+            'filename' => $filename,
+            'fullpath' => realpath($fullpath),
+            'url' => str_replace("//", "/", $this->app['paths']['files'] . $filename)
+        );
+
+        // Landscape if aspectratio > 5:4
+        $info['landscape'] = ($ar >= 1.25) ? true : false;
+
+        // Portrait if aspectratio < 4:5
+        $info['portrait'] = ($ar <= 0.8) ? true : false;
+
+        // Square-ish, if neither portrait or landscape
+        $info['square'] = !$info['landscape'] && !$info['portrait'];
+
+        return $info;
+
+    }
+
+
+    /**
+     * Return the 'sluggified' version of a string.
+     *
+     * @param $str input value
+     * @return string slug
+     */
+    public function slug($str)
+    {
+
+        $slug = makeSlug($str);
+
+        return $slug;
 
     }
 
@@ -224,10 +363,14 @@ class TwigExtension extends \Twig_Extension
     public function markdown($content)
     {
         // Parse the field as Markdown, return HTML
-        $markdownParser = new \dflydev\markdown\MarkdownParser();
-        $output = $markdownParser->transformMarkdown($content);
+        $output = \Parsedown::instance()->parse($content);
 
         return $output;
+    }
+
+    public function decorateTT($str)
+    {
+        return decorateTT($str);
     }
 
     /**
@@ -448,6 +591,7 @@ class TwigExtension extends \Twig_Extension
         if (!empty($relationoptions['order'])) {
             $options['order'] = $relationoptions['order'];
             $options['limit'] = 10000;
+            $options['hydrate'] = false;
         }
 
         // @todo Perhaps make something more lightweight for this?
@@ -534,6 +678,45 @@ class TwigExtension extends \Twig_Extension
 
 
     /**
+     * return the 'round' of a value..
+     *
+     * @param  float|int $a
+     * @return int
+     */
+    public function round($a)
+    {
+        return round($a);
+    }
+
+
+
+    /**
+     * return the 'floor' of a value..
+     *
+     * @param  float|int $a
+     * @return int
+     */
+    public function floor($a)
+    {
+        return floor($a);
+    }
+
+
+
+    /**
+     * return the 'ceil' of a value..
+     *
+     * @param  float|int $a
+     * @return int
+     */
+    public function ceil($a)
+    {
+        return ceil($a);
+    }
+
+
+
+    /**
      * Return the requested parameter from $_REQUEST, $_GET or $_POST..
      *
      * @param  string $parameter    The parameter to get
@@ -583,7 +766,7 @@ class TwigExtension extends \Twig_Extension
      * @param  string $filename Target filename
      * @param  string|int $width    Target width
      * @param  string|int $height   Target height
-     * @param  string $crop     String identifier for cropped images
+     * @param  string $crop     String identifier for cropped images. You can use next option fit, borders, resize or crop(dy default)
      * @return string     Thumbnail path
      */
     public function thumbnail($filename, $width = '', $height = '', $crop = "")
@@ -608,7 +791,8 @@ class TwigExtension extends \Twig_Extension
             $crop = substr($crop, 0, 1);
         }
 
-        $thumbnail = sprintf("%sthumbs/%sx%s%s/%s",
+        $thumbnail = sprintf(
+            "%sthumbs/%sx%s%s/%s",
             $this->app['paths']['root'],
             $width,
             $height,
@@ -638,8 +822,7 @@ class TwigExtension extends \Twig_Extension
 
             $image = $this->thumbnail($filename, $width, $height, $crop);
 
-            $output = sprintf('<img src="%s" width="%s" height="%s">',
-                $image, $width, $height);
+            $output = sprintf('<img src="%s" width="%s" height="%s">', $image, $width, $height);
 
         } else {
             $output = "&nbsp;";
@@ -654,14 +837,16 @@ class TwigExtension extends \Twig_Extension
      *
      * example: {{ content.image|fancybox(320, 240) }}
      * example: {{ fancybox(content.image, 320, 240) }}
+     * example: {{ content.image|fancybox(width=320, height=240, title="My Image") }}
      *
      * @param  string $filename Image filename
-     * @param  int $width    Image width
-     * @param  int $height   Image height
-     * @param  string $crop     Crop image string identifier
+     * @param  int $width Image width
+     * @param  int $height Image height
+     * @param  string $crop Crop image string identifier
+     * @param  string $title Display title for image
      * @return string HTML output
      */
-    public function fancybox($filename = "", $width = 100, $height = 100, $crop = "")
+    public function fancybox($filename = "", $width = 100, $height = 100, $crop = "", $title = "")
     {
 
         if (!empty($filename)) {
@@ -674,9 +859,14 @@ class TwigExtension extends \Twig_Extension
             $thumbnail = $this->thumbnail($filename, $width, $height, $crop);
             $large = $this->thumbnail($filename, $fullwidth, $fullheight, 'r');
 
-            $output = sprintf('<a href="%s" class="fancybox" rel="fancybox" title="Image: %s">
-                    <img src="%s" width="%s" height="%s"></a>',
-                $large, $filename, $thumbnail, $width, $height);
+            if (empty($title)) {
+                $title = sprintf('%s: %s', __("Image"), $filename);
+            }
+
+            $output = sprintf(
+                '<a href="%s" class="fancybox" rel="fancybox" title="%s"><img src="%s" width="%s" height="%s"></a>',
+                $large, $title, $thumbnail, $width, $height
+            );
 
         } else {
             $output = "&nbsp;";
@@ -703,7 +893,8 @@ class TwigExtension extends \Twig_Extension
             return $this->thumbnail($filename, $width, $height, $crop);
         }
 
-        $image = sprintf("%sfiles/%s",
+        $image = sprintf(
+            "%sfiles/%s",
             $this->app['paths']['root'],
             safeFilename($filename)
         );
@@ -724,7 +915,8 @@ class TwigExtension extends \Twig_Extension
     {
         $contenttype = $content->contenttype['slug'];
 
-        $output = sprintf("<div class='Bolt-editable' data-id='%s' data-contenttype='%s' data-field='%s'>%s</div>",
+        $output = sprintf(
+            "<div class='Bolt-editable' data-id='%s' data-contenttype='%s' data-field='%s'>%s</div>",
             $content->id,
             $contenttype,
             $field,
@@ -741,9 +933,10 @@ class TwigExtension extends \Twig_Extension
      */
     public function isMobileClient()
     {
-        if (preg_match('/(android|blackberry|htc|iemobile|iphone|ipad|ipaq|ipod|nokia|playbook|smartphone)/i',
-            $_SERVER['HTTP_USER_AGENT'])
-        ) {
+        if (preg_match(
+            '/(android|blackberry|htc|iemobile|iphone|ipad|ipaq|ipod|nokia|playbook|smartphone)/i',
+            $_SERVER['HTTP_USER_AGENT']
+        )) {
             return true;
         } else {
             return false;
@@ -804,6 +997,9 @@ class TwigExtension extends \Twig_Extension
      */
     private function menuHelper($item)
     {
+        if (isset($item['submenu']) && is_array($item['submenu'])) {
+            $item['submenu'] = $this->menuHelper($item['submenu']);
+        }
 
         if (isset($item['path']) && $item['path'] == "homepage") {
             $item['link'] = $this->app['paths']['root'];
@@ -895,20 +1091,25 @@ class TwigExtension extends \Twig_Extension
     }
 
     /**
-     * Check if a certain action is allowed for the current user.
+     * Check if a certain action is allowed for the current user (and possibly
+     * content item).
      *
-     * @param  string $what Operation
+     * @param string $what Operation
+     * @param mixed $content If specified, a Content item.
      * @return bool   True if allowed
      */
-    public function isAllowed($what)
+    public function isAllowed($what, $content = null)
     {
+        if ($content) {
+            $what = "contenttype:{$content->contenttype['slug']}:$what:{$content['id']}";
+        }
         return $this->app['users']->isAllowed($what);
     }
 
     /**
      * Translate using our __()
      *
-     * @param string $content
+     * @internal param string $content
      *
      * @return string translated content
      */
@@ -933,6 +1134,24 @@ class TwigExtension extends \Twig_Extension
     }
 
     /**
+     * Return a 'safe string' version of a given string.
+     *
+     * @see function safeString() in app/classes/lib.php.
+     *
+     * @param $str
+     * @param bool $strict
+     * @param string $extrachars
+     * @return string
+     */
+    public function safestring($str, $strict = false, $extrachars = "")
+    {
+
+        return safeString($str, $strict, $extrachars);
+
+    }
+
+
+    /**
      * Redirect the browser to another page.
      */
     public function redirect($path)
@@ -947,11 +1166,12 @@ class TwigExtension extends \Twig_Extension
     }
 
 
-
     /**
      * Return an array with the items on the stack
      *
-     * @param string type
+     * @param int $amount
+     * @param string $type type
+     * @return
      */
     public function stackitems($amount = 20, $type = "")
     {
@@ -963,4 +1183,17 @@ class TwigExtension extends \Twig_Extension
     }
 
 
+    /**
+     * Return whether or not an item is on the stack
+     *
+     * @param string filename
+     */
+    public function stacked($filename)
+    {
+
+        $stacked = $this->app['stack']->isOnStack($filename);
+
+        return $stacked;
+
+    }
 }

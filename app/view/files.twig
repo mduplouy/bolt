@@ -70,10 +70,12 @@
 
             <div class="btn-group">
 
-                <a href="#" class="btn btn-mini" data-action="addToStack('{{file.newpath}}');">
+                {% if not stacked(file.newpath) %}
+                <a href="#" class="btn btn-mini" data-action="stack.addToStack('{{file.newpath}}', this);">
                     <i class="icon-paper-clip"></i>
                     {{ __('Place on stack') }}
                 </a>
+                {% endif %}
 
                 <a class="btn dropdown-toggle btn-mini" data-toggle="dropdown">
                     <i class="icon-info-sign"></i>
@@ -82,7 +84,7 @@
                 </a>
 
                 <ul class="dropdown-menu pull-right">
-                    <li><a href="#" data-confirm="Not yet implemented. Sorry!" class="confirm">
+                    <li><a href="#" data-action="files.deleteFile('{{file.newpath}}', this);">
                         <i class="icon-ban-circle"></i> {{ __('Delete %filename%',{'%filename%':file.filename}) }}</a></li>
                     <li><a href="#" data-confirm="Not yet implemented. Sorry!" class="confirm">
                         <i class="icon-copy"></i> {{ __('Duplicate %filename%',{'%filename%':file.filename}) }}</a></li>

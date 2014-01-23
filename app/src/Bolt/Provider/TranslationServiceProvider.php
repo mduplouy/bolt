@@ -2,13 +2,14 @@
 
 namespace Bolt\Provider;
 
+use Silex\Application;
 use Silex\ServiceProviderInterface;
 use Symfony\Component\Translation\Loader as TranslationLoader;
 
 class TranslationServiceProvider implements ServiceProviderInterface
 {
 
-    public function register(\Silex\Application $app)
+    public function register(Application $app)
     {
         return null;
     }
@@ -20,20 +21,13 @@ class TranslationServiceProvider implements ServiceProviderInterface
      * and should be used for "dynamic" configuration (whenever
      * a service must be requested).
      */
-    public function boot(\Silex\Application $app)
+    public function boot(Application $app)
     {
         if (isset($app['translator'])) {
             $paths = getPaths($app);
 
-            $loaders = array(
-                'csv' => new TranslationLoader\CsvFileLoader(),
-                'ini' => new TranslationLoader\IniFileLoader(),
-                'mo' => new TranslationLoader\MoFileLoader(),
-                'php' => new TranslationLoader\PhpFileLoader(),
-                'xlf' => new TranslationLoader\XliffFileLoader(),
-                'yml' => new TranslationLoader\YamlFileLoader(),
-            );
-            $registeredLoaders = array();
+            $app['translator']->addLoader('yml', new TranslationLoader\YamlFileLoader());
+
             // Directory to look for translation file(s)
             $translationDir = $paths['apppath'] . '/resources/translations/' . $app['locale'];
 
@@ -43,42 +37,19 @@ class TranslationServiceProvider implements ServiceProviderInterface
                  * @var \SplFileInfo $fileInfo
                  */
                 foreach ($iterator as $fileInfo) {
-                    if ($fileInfo->isFile()) {
-                        $extension = getExtension($fileInfo->getFilename());
-                        // $extension = $fileInfo->getExtension(); -- not available before 5.3.7.
-                        if (array_key_exists($extension, $loaders)) {
-                            if (!array_key_exists($extension, $registeredLoaders)) {
-                                // TranslationFileLoader not yet registered
-                                $app['translator']->addLoader($extension, $loaders[$extension]);
-                            }
-                            // There's a file, there's a loader, let's try
-                            $fnameParts = explode(".", $fileInfo->getFilename());
-                            $domain = $fnameParts[0];
-                            $app['translator']->addResource($extension, $fileInfo->getRealPath(), $app['locale'], $domain);
-                        }
+                    if ($fileInfo->isFile() && (getExtension($fileInfo->getFilename()) == "yml")) {
+                        $fnameParts = explode(".", $fileInfo->getFilename());
+                        $domain = $fnameParts[0];
+                        $app['translator']->addResource('yml', $fileInfo->getRealPath(), $app['locale'], $domain);
                     }
                 }
             }
 
-            // load fallback for infos domain
-            $locale_fb = $app['locale_fallback'];
-            $translationDir = $paths['apppath'] . '/resources/translations/' . $locale_fb;
-
-            if (is_dir($translationDir)) {
-                $extension = 'yml';
-                $domain = 'infos';
-                $infosfilename = "$translationDir/$domain.$locale_fb.$extension";
-                if (is_readable($infosfilename)) {
-                    if (array_key_exists($extension, $loaders)) {
-                        if (!array_key_exists($extension, $registeredLoaders)) {
-                            // TranslationFileLoader not yet registered
-                            $app['translator']->addLoader($extension, $loaders[$extension]);
-                        }
-                        $app['translator']->addResource($extension, $infosfilename, $locale_fb, $domain);
-                    }
-                }
+            // Load fallback for infos domain
+            $infosfilename = dirname(dirname(dirname(__DIR__))) . '/resources/translations/en/infos.en.yml';
+            if (is_readable($infosfilename)) {
+                $app['translator']->addResource('yml', $infosfilename, 'en', 'infos');
             }
         }
     }
-
 }

@@ -168,6 +168,7 @@ class WXR_Parser_SimpleXML {
 			$post['post_type'] = (string) $wp->post_type;
 			// Added by Bob, for Bolt.
 			$post['image'] = (string) $item->image;
+            $post['categories'] = $categories;
 			$post['post_password'] = (string) $wp->post_password;
 			$post['is_sticky'] = (int) $wp->is_sticky;
 
@@ -304,7 +305,7 @@ class WXR_Parser_XML {
 					$this->sub_data['slug'] = $attr['nicename'];
 				}
 				break;
-			case 'item': $this->in_post = true;
+			case 'item': $this->in_post = true; break;
 			case 'title': if ( $this->in_post ) $this->in_tag = 'post_title'; break;
 			case 'guid': $this->in_tag = 'guid'; break;
 			case 'dc:creator': $this->in_tag = 'post_author'; break;
