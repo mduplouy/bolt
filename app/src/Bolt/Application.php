@@ -5,6 +5,7 @@ namespace Bolt;
 use RandomLib;
 use SecurityLib;
 use Silex;
+use Symfony\Component\Console\Application as ConsoleApplication;
 use Symfony\Component\HttpKernel\Exception\HttpException;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -15,8 +16,8 @@ class Application extends Silex\Application
 {
     public function __construct(array $values = array())
     {
-        $values['bolt_version'] = '1.4.4';
-        $values['bolt_name'] = '';
+        $values['bolt_version'] = '1.5.5';
+        $values['bolt_name'] = 'dev';
 
         parent::__construct($values);
 
@@ -46,6 +47,13 @@ class Application extends Silex\Application
             )
         ));
 
+        // Disable Silex's built-in native filebased session handler, and fall back to
+        // whatever's set in php.ini.
+        // @see: http://silex.sensiolabs.org/doc/providers/session.html#custom-session-configurations
+        if ($this['config']->get('general/session_use_storage_handler') === false) {
+            $this['session.storage.handler'] = null;
+        }
+
         $this->register(new Provider\LogServiceProvider());
     }
 
@@ -59,6 +67,9 @@ class Application extends Silex\Application
 
         // Initialize the Database Providers.
         $this->initDatabase();
+
+        // Initialize the Console Application for Nut
+        $this->initConsoleApplication();
 
         // Initialize the rest of the Providers.
         $this->initProviders();
@@ -87,6 +98,20 @@ class Application extends Silex\Application
             'db.options' => $dboptions
         ));
 
+        // Do a dummy query, to check for a proper connection to the database.
+        try {
+            $this['db']->query("SELECT 1;");
+        } catch (\PDOException $e) {
+            $error = "Bolt could not connect to the database. Make sure the database is configured correctly in
+                    <code>app/config/config.yml</code>, that the database engine is running.";
+            if ($dboptions['driver'] != 'pdo_sqlite') {
+                $error .= "<br><br>Since you're using " . $dboptions['driver'] . ", you should also make sure that the
+                database <code>" . $dboptions['dbname'] . "</code> exists, and the configured user has access to it.";
+            }
+            $checker = new \LowlevelChecks();
+            $checker->lowLevelError($error);
+        }
+
         if ($dboptions['driver'] == 'pdo_sqlite') {
             $this['db']->query('PRAGMA synchronous = OFF');
         } elseif ($dboptions['driver'] == 'pdo_mysql') {
@@ -95,13 +120,14 @@ class Application extends Silex\Application
              */
             $this['db']->getDatabasePlatform()->registerDoctrineTypeMapping('enum', 'string');
             // set utf8 on names and connection as all tables has this charset
+
             $this['db']->query("SET NAMES 'utf8';");
             $this['db']->query("SET CHARACTER SET 'utf8';");
             $this['db']->query("SET CHARACTER_SET_CONNECTION = 'utf8';");
         }
 
         $this->register(new Silex\Provider\HttpCacheServiceProvider(), array(
-            'http_cache.cache_dir' => __DIR__ . '/cache/',
+            'http_cache.cache_dir' => BOLT_CACHE_DIR,
         ));
     }
 
@@ -111,7 +137,7 @@ class Application extends Silex\Application
             'twig.path'    => $this['config']->get('twigpath'),
             'twig.options' => array(
                 'debug'            => true,
-                'cache'            => __DIR__ . '/../../cache/',
+                'cache'            => BOLT_CACHE_DIR,
                 'strict_variables' => $this['config']->get('general/strict_variables'),
                 'autoescape'       => true,
             )
@@ -167,28 +193,37 @@ class Application extends Silex\Application
             ->register(new Provider\StorageServiceProvider())
             ->register(new Provider\UsersServiceProvider())
             ->register(new Provider\CacheServiceProvider())
+            ->register(new Provider\IntegrityCheckerProvider())
             ->register(new Provider\ExtensionServiceProvider())
-            ->register(new Provider\StackServiceProvider());
+            ->register(new Provider\StackServiceProvider())
+            ->register(new Provider\CronServiceProvider())
+            ->register(new Provider\FilePermissionsServiceProvider());
 
         $this['paths'] = getPaths($this['config']);
         $this['twig']->addGlobal('paths', $this['paths']);
 
         // Add the Bolt Twig functions, filters and tags.
         $this['twig']->addExtension(new TwigExtension($this));
+
         $this['twig']->addTokenParser(new SetcontentTokenParser());
 
         // Initialize enabled extensions.
         $this['extensions']->initialize();
 
         // @todo: make a provider for the Integrity checker and Random generator..
-
-        // Set up the integrity checker for the Database, to periodically check if the Database
-        // is up to date, and if needed: repair it.
-        $this['integritychecker'] = new Database\IntegrityChecker($this);
     }
 
     public function initMountpoints()
     {
+        $app = $this;
+
+        // Wire up our custom url matcher to replace the default Silex\RedirectableUrlMatcher
+        $this['url_matcher'] = $this->share(function() use ($app) {
+            return new BoltUrlMatcher(
+                new \Symfony\Component\Routing\Matcher\UrlMatcher($app['routes'], $app['request_context'])
+            );
+        });
+
         $request = Request::createFromGlobals();
         if ($proxies = $this['config']->get('general/trustProxies')) {
             $request->setTrustedProxies($proxies);
@@ -210,6 +245,20 @@ class Application extends Silex\Application
         $this->mount('', new Controllers\Routing());
     }
 
+    /**
+     * Initializes the Console Application that is responsible for CLI interactions.
+     */
+    public function initConsoleApplication()
+    {
+        $this['console'] = $this->share(function (Application $app) {
+            $console = new ConsoleApplication();
+            $console->setName('Bolt console tool - Nut');
+            $console->setVersion($app->getVersion());
+
+            return $console;
+        });
+    }
+
     public function BeforeHandler(Request $request)
     {
         // Start the 'stopwatch' for the profiler.
@@ -226,6 +275,7 @@ class Application extends Silex\Application
         $this['twig']->addGlobal('user', $this['users']->getCurrentUser());
         $this['twig']->addGlobal('users', $this['users']->getUsers());
         $this['twig']->addGlobal('config', $this['config']);
+        $this['twig']->addGlobal('theme', $this['config']->get('theme'));
 
         if ($response = $this['render']->fetchCachedRequest()) {
             // Stop the 'stopwatch' for the profiler.
@@ -260,7 +310,7 @@ class Application extends Silex\Application
 
             // Register the Silex/Symfony web debug toolbar.
             $this->register(new Silex\Provider\WebProfilerServiceProvider(), array(
-                'profiler.cache_dir'    => __DIR__ . '/../../cache/profiler',
+                'profiler.cache_dir'    => BOLT_CACHE_DIR . '/profiler',
                 'profiler.mount_prefix' => '/_profiler', // this is the default
             ));
 

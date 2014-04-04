@@ -58,22 +58,23 @@ class IntegrityChecker
 
         $this->tables = null;
 
+        $this->extension_table_generators = array();
     }
 
     private static function getValidityTimestampFilename()
     {
-        return dirname(__FILE__) . '/../../../cache/' . self::INTEGRITY_CHECK_TS_FILENAME;
+        return BOLT_CACHE_DIR . '/' . self::INTEGRITY_CHECK_TS_FILENAME;
     }
 
     public static function invalidate()
     {
-        // delete app/cache/dbcheck-ts
+        // delete the cached dbcheck-ts
         if (is_writable(self::getValidityTimestampFilename())) {
             unlink(self::getValidityTimestampFilename());
         } elseif (file_exists(self::getValidityTimestampFilename())) {
             $message = sprintf(
-                "The file 'app/cache/%s' exists, but couldn't be removed. Please remove this file manually, and try again.",
-                self::INTEGRITY_CHECK_TS_FILENAME
+                "The file '%s' exists, but couldn't be removed. Please remove this file manually, and try again.",
+                self::getValidityTimestampFilename()
             );
             die($message);
         }
@@ -325,7 +326,39 @@ class IntegrityChecker
     {
         $schema = new Schema();
 
-        return array_merge($this->getBoltTablesSchema($schema), $this->getContentTypeTablesSchema($schema));
+        return array_merge(
+                $this->getBoltTablesSchema($schema),
+                $this->getContentTypeTablesSchema($schema),
+                $this->getExtensionTablesSchema($schema));
+    }
+
+    /**
+     * This method allows extensions to register their own tables.
+     * @param Callable $generator A generator function that takes the Schema
+     *         instance and returns a table or an array of tables.
+     */
+    public function registerExtensionTable($generator)
+    {
+        $this->extension_table_generators[] = $generator;
+    }
+
+    protected function getExtensionTablesSchema(Schema $schema)
+    {
+        $tables = array();
+        foreach ($this->extension_table_generators as $generator) {
+            $table = call_user_func($generator, $schema);
+            // We need to be prepared for generators returning a single table,
+            // as well as generators returning an array of tables.
+            if (is_array($table)) {
+                foreach ($table as $t) {
+                    $tables[] = $t;
+                }
+            }
+            else {
+                $tables[] = $table;
+            }
+        }
+        return $tables;
     }
 
     /**
@@ -463,6 +496,14 @@ class IntegrityChecker
         $contentChangelogTable->addColumn("diff", "text", array());
         $tables[] = $contentChangelogTable;
 
+        $cronTable = $schema->createTable($this->prefix."cron");
+        $cronTable->addColumn("id", "integer", array('autoincrement' => true));
+        $cronTable->setPrimaryKey(array("id"));
+        $cronTable->addColumn("interval", "string", array("length" => 16));
+        $cronTable->addIndex(array('interval'));
+        $cronTable->addColumn("lastrun", "datetime");
+        $tables[] = $cronTable;
+
         return $tables;
     }
 
@@ -543,10 +584,10 @@ class IntegrityChecker
                         $myTable->addColumn($field, "text", array("default" => $this->textDefault));
                         break;
                     case 'datetime':
-                        $myTable->addColumn($field, "datetime");
+                        $myTable->addColumn($field, "datetime", array("notnull" => false));
                         break;
                     case 'date':
-                        $myTable->addColumn($field, "date");
+                        $myTable->addColumn($field, "date", array("notnull" => false));
                         break;
                     case 'slug':
                     case 'id':

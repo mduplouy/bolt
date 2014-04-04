@@ -34,8 +34,15 @@ makeDir(__DIR__.'/../../../files/'.date('Y-m'));
 
 require('upload.class.php');
 
+// Default accepted filetypes are: gif|jpe?g|png|zip|tgz|txt|md|docx?|pdf|xlsx?|pptx?|mp3|ogg|wav|m4a|mp4|m4v|ogv|wmv|avi|webm
+if (is_array($app['config']->get('general/accept_file_types'))) {
+    $accepted_ext = implode('|', $app['config']->get('general/accept_file_types'));
+} else {
+    $accepted_ext = $app['config']->get('general/accept_file_types');
+}
+
 $upload_handler = new UploadHandler(array(
     'upload_dir' => dirname(dirname(dirname(dirname($_SERVER['SCRIPT_FILENAME'])))).'/files/'.date('Y-m')."/",
     'upload_url' => '/files/'.date('Y-m')."/",
-    'accept_file_types' => '/\.(gif|jpe?g|png|zip|tgz|txt|md|docx?|pdf|xlsx?|pptx?|mp3|ogg|wav|m4a|mp4|m4v|ogv|wmv|avi|webm)$/i'
+    'accept_file_types' => '/\.(' . $accepted_ext . ')$/i'
 ));

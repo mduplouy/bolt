@@ -223,6 +223,7 @@ class Frontend
         // So that they're also available in menu's and templates rendered by extensions.
         $app['twig']->addGlobal('records', $content);
         $app['twig']->addGlobal($contenttype['slug'], $content);
+        $app['twig']->addGlobal('contenttype', $contenttype['name']);
 
         return $app['render']->render($template);
 
@@ -370,5 +371,24 @@ class Frontend
         $template = $app['config']->get('general/search_results_template', $app['config']->get('general/listing_template'));
 
         return $app['render']->render($template);
+    }
+
+    /**
+     * Renders the specified template from the current theme in response to a request without
+     * loading any content.
+     */
+    public static function template(Silex\Application $app, $template) {
+      // Add the template extension if it is missing
+      if(!preg_match('/\\.twig$/i', $template))
+        $template .= '.twig';
+
+      $themePath    = realpath($app['paths']['themepath'] . '/');
+      $templatePath = realpath($app['paths']['themepath'] . '/' . $template);
+
+      // Verify that the resulting template path is located in the theme directory
+      if($themePath !== substr($templatePath, 0, strlen($themePath)))
+        throw new \Exception("Invalid template: $template");
+
+      return $app['render']->render(substr($templatePath, strlen($themePath)));
     }
 }

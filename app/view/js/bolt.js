@@ -4,7 +4,7 @@ try { console.assert(1); } catch(e) { console = { log: function() {}, assert: fu
 jQuery(function($) {
 
     // Any link (or clickable <i>-icon) with a class='confirm' gets a confirmation dialog..
-    $('a.confirm').on('click', function(){
+    $('.confirm').on('click', function(){
         return confirm( $(this).data('confirm') );
     });
 
@@ -44,11 +44,6 @@ jQuery(function($) {
     // Add Date and Timepickers..
     $(".datepicker").datepicker({ dateFormat: "DD, d MM yy" });
 
-    $.mask.definitions['2']='[0-2]';
-    $.mask.definitions['5']='[0-5]';
-
-    $(".timepicker").mask("29:59");
-
     // initialize 'moment' timestamps..
     if ($('.moment').is('*')) {
         updateMoments();
@@ -58,10 +53,6 @@ jQuery(function($) {
     if ($('#latestactivity').is('*')) {
         setTimeout( function(){ updateLatestActivity(); }, 20 * 1000);
     }
-
-    // Hackish fix for an issue on Ipad, where dropdown menus wouldn't be clickable. Hopefully fixed in Bootstrap 2.1.2
-    // See https://github.com/twitter/bootstrap/issues/2975
-    // $('body').on('touchstart.dropdown', '.dropdown-menu', function (e) { e.stopPropagation(); });
 
     // Initialize popovers.
     $('.info-pop').popover({
@@ -174,9 +165,6 @@ function initKeyboardShortcuts() {
             console.log('watch');
         }, 1000);
 
-        // Initialize handler for 'closing window'
-        window.onbeforeunload = confirmExit;
-
         function confirmExit()
         {
             if ($('form').hasChanged()) {
@@ -184,6 +172,8 @@ function initKeyboardShortcuts() {
             }
         }
 
+        // Initialize handler for 'closing window'
+        window.onbeforeunload = confirmExit;
     }
 
 
@@ -204,8 +194,7 @@ CKEDITOR.editorConfig = function( config ) {
     config.toolbar = [
         { name: 'styles', items: [ 'Format' ] },
         { name: 'basicstyles', items: [ 'Bold', 'Italic', 'Underline', 'Strike' ] },
-        { name: 'paragraph', items: [ 'NumberedList', 'BulletedList', 'Indent', 'Outdent', '-', 'Blockquote' ] },
-
+        { name: 'paragraph', items: [ 'NumberedList', 'BulletedList', 'Indent', 'Outdent', '-', 'Blockquote' ] }
     ];
 
     if (wysiwyg.anchor) {
@@ -221,7 +210,10 @@ CKEDITOR.editorConfig = function( config ) {
         config.toolbar = config.toolbar.concat({ name: 'image', items: [ 'Image' ] });
     }
     if (wysiwyg.embed) {
-        config.toolbar = config.toolbar.concat({ name: 'embed', items: [ 'MediaEmbed' ] });
+        config.extraPlugins = 'oembed,widget';
+        config.oembed_maxWidth = '853';
+        config.oembed_maxHeight = '480';
+        config.toolbar = config.toolbar.concat({ name: 'embed', items: [ 'oembed' ] });
     }
 
     if (wysiwyg.tables) {
@@ -357,7 +349,11 @@ function bindFileUpload(key) {
                         stack.addToStack(filename);
 
                     } else {
-                        alert("Oops! There was an error uploading the image. Make sure the image file is not corrupt, and that the 'files/'-folder is writable.");
+                        var message = "Oops! There was an error uploading the file. Make sure the file is not corrupt, and that the 'files/'-folder is writable."
+                            + "\n\n(error was: "
+                            + file.error + ")";
+
+                        alert(message);
                         window.setTimeout(function(){ $('#progress-' + key).fadeOut('slow'); }, 50);
                     }
                     $('#progress-' + key + ' div.bar').css('width', "100%");
@@ -369,9 +365,27 @@ function bindFileUpload(key) {
             var progress = Math.round(100 * data._bitrateTimer.loaded / data.files[0].size);
             $('#progress-' + key).show().addClass('progress-striped active');
             $('#progress-' + key + ' div.bar').css('width', progress+"%");
-        });
+        })
+        .bind('fileuploadsubmit', function (e, data) {
+                var that = this,
+                fileTypes = $('#field-' + key).attr('accept');
 
+                if( typeof fileTypes !== 'undefined' ) {
+                    var pattern = new RegExp( "(\.|\/)(" + fileTypes + ")$", "gi" );
+                    $.each( data.files , function (index, file) {
+                        if( !pattern.test(file.type) ) {
+                            var message = "Oops! There was an error uploading the file. Make sure that the file type is correct."
+                            + "\n\n(accept type was: "
+                            + fileTypes + ")";
 
+                            alert(message);
+                            e.preventDefault();
+                            return false;
+                        }
+                    });
+                }
+        })
+        ;
 }
 
 
@@ -900,6 +914,23 @@ var FilelistHolder = Backbone.View.extend({
                         $this.add(filename, filename);
                     });
                 }
+            }).bind('fileuploadsubmit', function (e, data) {
+                var that = this,
+                fileTypes = $('#fileupload-' + contentkey).attr('accept');
+
+                if( typeof fileTypes !== 'undefined' ) {
+                    var pattern = new RegExp( "(\.|\/)(" + fileTypes + ")$", "i" );
+                    $.each( data.files , function (index, file) {
+                        if( !pattern.test(file.name) ) {
+                            var message = "Oops! There was an error uploading the file. Make sure that the file type is correct."
+                                            + "\n\n(accept type was: "
+                                            + fileTypes + ")";
+                            alert(message);
+                            e.preventDefault();
+                            return false;
+                        }
+                    });
+                }
             });
 
         $holder.find("div.list").on('click', 'a', function(e) {
@@ -1031,6 +1062,23 @@ var ImagelistHolder = Backbone.View.extend({
                     $.each(data.result, function (index, file) {
                         var filename = decodeURI(file.url).replace("/files/", "");
                         $this.add(filename, filename);
+                    });
+                }
+            }).bind('fileuploadsubmit', function (e, data) {
+                var that = this,
+                fileTypes = $('#fileupload-' + contentkey).attr('accept');
+
+                if( typeof fileTypes !== 'undefined' ) {
+                    var pattern = new RegExp( "(\.|\/)(" + fileTypes + ")$", "i" );
+                    $.each( data.files , function (index, file) {
+                        if( !pattern.test(file.name) ) {
+                            var message = "Oops! There was an error uploading the image. Make sure that the file type is correct."
+                                            + "\n\n(accept type was: "
+                                            + fileTypes + ")";
+                            alert(message);
+                            e.preventDefault();
+                            return false;
+                        }
                     });
                 }
             });

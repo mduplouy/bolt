@@ -26,3 +26,7 @@ php-cs-fixer.phar
 composer.lock
 tests/_log
 tests/*/*Guy.php
+.buildpath
+.project
+
+app/view/config.codekit

@@ -476,6 +476,36 @@ ul.dropdown-menu li a.nolink {
     color: #888 !important;
 }
 
+ul.dropdown-menu li form {
+    margin: 0;
+    padding: 0;
+}
+
+ul.dropdown-menu li form .btn-link {
+    font-size: 13px;
+    padding: 1px 14px;
+    border: none;
+    color: #333333;
+    text-shadow: none;
+    display: block;
+    width: 100%;
+    text-align: left;
+}
+
+ul.dropdown-menu li form .btn-link:hover {
+    text-decoration:none;
+    text-shadow: none;
+    color:#ffffff;
+    background-color:#0081c2;
+    background-image:-moz-linear-gradient(top, #0088cc, #0077b3);
+    background-image:-webkit-gradient(linear, 0 0, 0 100%, from(#0088cc), to(#0077b3));
+    background-image:-webkit-linear-gradient(top, #0088cc, #0077b3);
+    background-image:-o-linear-gradient(top, #0088cc, #0077b3);
+    background-image:linear-gradient(to bottom, #0088cc, #0077b3);
+    background-repeat:repeat-x;
+    filter:progid:DXImageTransform.Microsoft.gradient(startColorstr='#ff0088cc', endColorstr='#ff0077b3', GradientType=0);
+}
+
 aside {
     margin-top: 15px;
 }
@@ -864,16 +894,23 @@ fieldset.checkbox div {
     box-shadow:  1px 1px 2px 0px rgba(0, 0, 0, 0.3);
 }
 
-
 #editcontent .dropzone {
     margin: 1em 0 0.5em;
-    height: 140px;
+    height: 166px;
     width: 97%;
     clear: both;
 }
 
 #editcontent .geolocation {
     height: 180px;
+}
+
+#editcontent .video {
+    height: 140px;
+}
+
+#editcontent .imageselect {
+    height: 176px;
 }
 
 #editcontent .dropzone.hover, #editcontent .dropzone.in  {
@@ -891,6 +928,17 @@ fieldset.checkbox div {
 #editcontent small {
     font-size: 12px;
     color: #666;
+}
+
+#editcontent p.filetypes {
+    font-size: 90%;
+    color: #888;
+    margin: -4px 0 6px;
+}
+
+
+#editcontent p.filetypes code {
+    color: #888;
 }
 
 .progress {
@@ -923,7 +971,7 @@ fieldset.checkbox div {
 
 
 #editcontent div.imagelistholder p,
-#editcontent div.filelistholder p, {
+#editcontent div.filelistholder p {
     padding: 8px;
     color: #999;
     margin: 0;

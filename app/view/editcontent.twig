@@ -7,6 +7,7 @@
     <h1>{{ title|raw }}</h1>
 
     <form method="post" id="editcontent" enctype="multipart/form-data">
+        {% include '_sub_csrf_token.twig' %}
 
         {% include '_sub_editfields.twig' %}
 
@@ -31,10 +32,12 @@
         <input type="text" name="datepublish-dateformatted" id="datepublish-date"
                {% if not can_publish %}disabled="disabled"{%endif%}
                value='{{ content.datepublish|date('l, d F Y') }}' class='datepicker'>
-        <input type="text" name="datepublish-timeformatted" id="datepublish-time"
+        <input type="time" name="datepublish-timeformatted" id="datepublish-time"
                {% if not can_publish %}disabled="disabled"{%endif%}
                value='{{ content.datepublish|date('H:i') }}' class='timepicker'>
         <input type="hidden" name="datepublish" id="datepublish" value="{{ content.datepublish }}">
+
+        <input type="hidden" name="editreferrer" id="editreferrer"{% if editreferrer is defined %} value="{{ editreferrer }}"{% endif %}>
         {% if isallowed('contenttype:' ~ contenttype.slug ~ ':publish:' ~ content.id) %}
         <script>
             $('#datepublish-date, #datepublish-time').on('change', function(){
@@ -52,7 +55,7 @@
         <input type="text" name="datedepublish-dateformatted" id="datedepublish-date"
                {% if not can_depublish %}disabled="disabled"{%endif%}
                value='{% if content.datedepublish > '1970-01-01 01:01:01' %}{{ content.datedepublish|date('l, d F Y') }}{% endif %}' class='datepicker'>
-        <input type="text" name="datedepublish-timeformatted" id="datedepublish-time"
+        <input type="time" name="datedepublish-timeformatted" id="datedepublish-time"
                {% if not can_depublish %}disabled="disabled"{%endif%}
                value='{% if content.datedepublish > '1970-01-01 01:01:01' %}{{ content.datedepublish|date('H:i') }}{% endif %}' class='timepicker'>
         <input type="hidden" name="datedepublish" id="datedepublish" value="{{ content.datedepublish }}">
@@ -75,7 +78,7 @@
 
         <label><b><span class='left'>{{ __('Status:') }}</span></b>
         <select name="status" {% if allowedStatuses|length <= 1 %}disabled="disabled"{% endif %} >
-            {% set status_names = { "published": "Published", "held": "Not published", "timed": "Timed publish", "draft": "Draft" } %}
+            {% set status_names = { "published": __("Published"), "held": __("Not published"), "timed": __("Timed publish"), "draft": __("Draft") } %}
             {% for status in allowedStatuses %}
             <option value="{{status}}" {% if content.status == status %}selected{% endif %}>{{ status_names[status] }}</option>
             {% endfor %}
@@ -187,7 +190,7 @@
                 $('form').watchChanges();
 
                 $.post("", $( "#editcontent" ).serialize() )
-                    .done(function( data ) {
+                    .done(function(data) {
                         // var message = "{{ __('The changes to this %contenttype% have been saved.', {'%contenttype%': contenttype.singular_name}) }}";
                         $('p.lastsaved').html('{{ __('Saved on:') }} <strong></strong> <small>({{ pretty.datetime(content.datechanged) }})</small></p>');
                         $('p.lastsaved').find('strong').text(moment().format('MMM D, HH:mm'));
@@ -195,9 +198,13 @@
                         $('p.lastsaved').find('time').attr('title', moment().format());
                         updateMoments();
 
-                        // Disable the buttons, to indicate stuff is being done.
+                    })
+                    .fail(function(){
+                        $('p.lastsaved').text('{{ __('Could not save %contenttype%.', { '%contenttype%': contenttype.singular_name }) }}');
+                    })
+                    .always(function(){
+                        // Re-enable buttons
                         $('#sidebarsavecontinuebutton, #savecontinuebutton').removeClass('disabled');
-
                     });
             }
 
